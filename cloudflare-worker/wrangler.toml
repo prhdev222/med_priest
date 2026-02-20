@@ -1,0 +1,8 @@
+name = "medpriest-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-18"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "medpriest-db"
+database_id = "097e443a-fb0b-4f34-bb7c-14985fcf2e02"
