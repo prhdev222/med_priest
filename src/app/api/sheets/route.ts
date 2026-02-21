@@ -9,7 +9,7 @@ interface CacheEntry {
   ts: number;
 }
 const cache = new Map<string, CacheEntry>();
-const TTL_MS = 30_000;
+const TTL_MS = 60_000; /* 1 นาที — โหลดซ้ำช่วงเดียวกันเร็วขึ้น */
 
 function getCached(key: string): CacheEntry | null {
   const entry = cache.get(key);
@@ -45,10 +45,7 @@ export async function GET(req: NextRequest) {
   const url = new URL(SCRIPT_URL);
   req.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));
   const cacheKey = url.searchParams.toString();
-  const action = req.nextUrl.searchParams.get("action");
-  const skipCache = action === "procedureStats" || action === "ipdByWard";
-
-  const cached = skipCache ? null : getCached(cacheKey);
+  const cached = getCached(cacheKey);
   if (cached) {
     return new NextResponse(cached.text, {
       status: cached.status,
@@ -75,7 +72,7 @@ export async function GET(req: NextRequest) {
         { status: 502 },
       );
     }
-    if (!skipCache) putCache(cacheKey, text, response.status);
+    putCache(cacheKey, text, response.status);
     return new NextResponse(text, {
       status: response.status,
       headers: {

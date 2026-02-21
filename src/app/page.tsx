@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getStats, getStatsCached, getIpdByWard, getProcedureStats, GroupBy, StatsResponse, IpdByWardRow, PROCEDURE_OPTIONS, ProcedureStatsResponse } from "@/lib/api";
+import { getStats, getStatsCached, getIpdByWard, getIpdByWardCached, getProcedureStats, getProcedureStatsCached, GroupBy, StatsResponse, IpdByWardRow, PROCEDURE_OPTIONS, ProcedureStatsResponse } from "@/lib/api";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import {
   Bar,
@@ -299,44 +299,43 @@ export default function DashboardPage() {
   });
 
   const fetchData = useCallback(() => {
+    if (useMock) return () => {};
     setLoading(true);
     setError("");
     const fromReq = group === "day" ? startOfWeekMonday(from) : from;
 
-    const stale = getStatsCached(fromReq, to, group);
-    if (stale) setData(safeParse(stale));
+    /* แสดงข้อมูลจาก cache ทันที (ถ้ามี) — รู้สึกโหลดเร็วขึ้น */
+    const staleStats = getStatsCached(fromReq, to, group);
+    if (staleStats) setData(safeParse(staleStats));
+    const staleIpd = getIpdByWardCached(fromReq, to, group);
+    if (staleIpd) setIpdByWardData(staleIpd);
+    const staleProc = getProcedureStatsCached(fromReq, to, group);
+    if (staleProc) setProcedureStats(staleProc);
 
     let mounted = true;
-    getStats(fromReq, to, group)
-      .then((res) => mounted && setData(safeParse(res)))
-      .catch((e) => mounted && setError(e.message))
+    Promise.all([
+      getStats(fromReq, to, group),
+      getIpdByWard(fromReq, to, group),
+      getProcedureStats(fromReq, to, group),
+    ])
+      .then(([statsRes, ipdRes, procRes]) => {
+        if (!mounted) return;
+        setData(safeParse(statsRes));
+        setIpdByWardData({ rows: Array.isArray(ipdRes?.rows) ? ipdRes.rows : [] });
+        setProcedureStats({
+          rows: Array.isArray(procRes?.rows) ? procRes.rows : [],
+          byProcedure: Array.isArray(procRes?.byProcedure) ? procRes.byProcedure : [],
+        });
+      })
+      .catch((e) => mounted && setError((e as Error).message))
       .finally(() => mounted && setLoading(false));
     return () => { mounted = false; };
-  }, [from, to, group]);
+  }, [from, to, group, useMock]);
 
   useEffect(() => {
     const cleanup = fetchData();
     return cleanup;
   }, [fetchData]);
-
-  useEffect(() => {
-    if (useMock) return;
-    const fromReq = group === "day" ? startOfWeekMonday(from) : from;
-    getIpdByWard(fromReq, to, group)
-      .then((res) => setIpdByWardData({ rows: Array.isArray(res?.rows) ? res.rows : [] }))
-      .catch(() => setIpdByWardData({ rows: [] }));
-  }, [from, to, group, useMock]);
-
-  useEffect(() => {
-    if (useMock) return;
-    const fromReq = group === "day" ? startOfWeekMonday(from) : from;
-    getProcedureStats(fromReq, to, group)
-      .then((res: ProcedureStatsResponse) => setProcedureStats({
-        rows: Array.isArray(res?.rows) ? res.rows : [],
-        byProcedure: Array.isArray(res?.byProcedure) ? res.byProcedure : [],
-      }))
-      .catch(() => setProcedureStats({ rows: [], byProcedure: [] }));
-  }, [from, to, group, useMock]);
 
   const safeRows = Array.isArray(data?.rows) ? data.rows : [];
   const safeWardStats = Array.isArray(data?.wardStats) ? data.wardStats : [];

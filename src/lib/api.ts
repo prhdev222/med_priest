@@ -171,8 +171,16 @@ export interface IpdByWardRow {
   ao: number;
 }
 
+const ipdByWardUrl = (from: string, to: string, group: GroupBy) =>
+  `/api/sheets?action=ipdByWard&from=${from}&to=${to}&group=${group}`;
+
 export async function getIpdByWard(from: string, to: string, group: GroupBy): Promise<{ rows: IpdByWardRow[] }> {
-  return fetchApi(`/api/sheets?action=ipdByWard&from=${from}&to=${to}&group=${group}`);
+  return fetchApi(ipdByWardUrl(from, to, group));
+}
+
+export function getIpdByWardCached(from: string, to: string, group: GroupBy): { rows: IpdByWardRow[] } | null {
+  const raw = getClientCached<{ rows?: IpdByWardRow[] }>(ipdByWardUrl(from, to, group));
+  return raw ? { rows: Array.isArray(raw?.rows) ? raw.rows : [] } : null;
 }
 
 export async function addStatsRow(payload: {
@@ -353,8 +361,20 @@ export async function getTodayEntries(code: string, date: string): Promise<Today
   };
 }
 
+const procedureStatsUrl = (from: string, to: string, group: GroupBy) =>
+  `/api/sheets?action=procedureStats&from=${from}&to=${to}&group=${group}`;
+
 export async function getProcedureStats(from: string, to: string, group: GroupBy): Promise<ProcedureStatsResponse> {
-  return fetchApi(`/api/sheets?action=procedureStats&from=${from}&to=${to}&group=${group}`);
+  return fetchApi(procedureStatsUrl(from, to, group));
+}
+
+export function getProcedureStatsCached(from: string, to: string, group: GroupBy): ProcedureStatsResponse | null {
+  const raw = getClientCached<ProcedureStatsResponse>(procedureStatsUrl(from, to, group));
+  if (!raw) return null;
+  return {
+    rows: Array.isArray(raw?.rows) ? raw.rows : [],
+    byProcedure: Array.isArray(raw?.byProcedure) ? raw.byProcedure : [],
+  };
 }
 
 export async function addProcedure(payload: { code: string; date: string; procedureKey: string; procedureLabel?: string; count?: number }) {
