@@ -13,7 +13,7 @@ const displayLinks = [
 const staffLinks = [
   { href: "/data-entry", label: "กรอกข้อมูล", icon: "📝" },
   { href: "/admin", label: "จัดการข้อมูล", icon: "⚙️" },
-  { href: "https://script.google.com/macros/s/AKfycbycsuxgiennNjoEweElBe0RLCR5wMOj-vvC74qApVy62IznXCUdo7F5iMGrBavFVOhW/exec?page=form", label: "คิวรับ case กลางแพทย์", icon: "📋", external: true },
+  { href: "https://med-queue-prh.vercel.app/", label: "คิวรับ case กลางแพทย์", icon: "📋", external: true },
 ];
 
 export default function Nav() {
