@@ -113,10 +113,36 @@ npm run dev
 | ตาราง | คอลัมน์ | หมายเหตุ |
 |---|---|---|
 | `opd` | id, date, count | ผู้ป่วยนอก/วัน |
+| `er` | id, date, count | ER ผู้ป่วยนอก/วัน (แยกจาก OPD) |
 | `consult` | id, date, count | ปรึกษานอกแผนก/วัน |
-| `ipd_stays` | id, hn, ward, admit_date, discharge_date, los | ผู้ป่วยใน |
+| `ipd_stays` | id, hn, ward, admit_date, discharge_date, los, stay_type | ผู้ป่วยใน (stay_type: admit=มี HN/LOS, ao=คนไข้ฝากนอน) |
 | `activities` | id, date, title, detail, type, image_url, image_caption, youtube_url, external_url | กิจกรรม |
 | `encouragement` | id, date, name, message | ข้อความให้กำลังใจ |
+| `procedures` | id, date, procedure_key, procedure_label, count | หัตถการเฉพาะ (Ward/ER/OPD/Consult) |
+
+---
+
+## อัปเดตเพิ่มตาราง ER (สำหรับ DB ที่มีอยู่แล้ว)
+ถ้าเคยสร้าง D1 มาก่อนและต้องการเพิ่ม "ER ผู้ป่วยนอก" ให้รันคำสั่งนี้ในโฟลเดอร์ `cloudflare-worker`:
+```bash
+wrangler d1 execute medpriest-db --remote --command "CREATE TABLE IF NOT EXISTS er ( id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, count INTEGER NOT NULL DEFAULT 0 ); CREATE INDEX IF NOT EXISTS idx_er_date ON er(date);"
+```
+
+---
+
+## อัปเดตเพิ่มตาราง procedures (หัตถการเฉพาะ)
+ถ้าเคยสร้าง D1 มาก่อนและต้องการเพิ่ม "หัตถการเฉพาะ" ให้รันคำสั่งนี้ในโฟลเดอร์ `cloudflare-worker`:
+```bash
+wrangler d1 execute medpriest-db --remote --command "CREATE TABLE IF NOT EXISTS procedures ( id INTEGER PRIMARY KEY AUTOINCREMENT, date TEXT NOT NULL, procedure_key TEXT NOT NULL, procedure_label TEXT DEFAULT '', count INTEGER NOT NULL DEFAULT 1 ); CREATE INDEX IF NOT EXISTS idx_procedures_date ON procedures(date);"
+```
+
+---
+
+## อัปเดต ipd_stays เพิ่ม stay_type (Admit / A/O)
+ถ้าเคยสร้าง D1 มาก่อนและต้องการแบ่ง Ward เป็น Admit (มี HN, คำนวณ LOS) กับ A/O (คนไข้ฝากนอน, นับจำนวนอย่างเดียว) ให้รัน:
+```bash
+wrangler d1 execute medpriest-db --remote --command "ALTER TABLE ipd_stays ADD COLUMN stay_type TEXT DEFAULT 'admit';"
+```
 
 ---
 

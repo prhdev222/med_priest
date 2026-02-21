@@ -3,6 +3,7 @@ export type GroupBy = "day" | "week" | "month" | "year";
 export interface StatsRow {
   key: string;
   opd: number;
+  er: number;
   consult: number;
   ipdAdmit: number;
   ipdDischarge: number;
@@ -43,6 +44,45 @@ export interface IpdOpenCase {
   hn: string;
   ward: string;
   admitDate: string;
+}
+
+/** รายการหัตถการเฉพาะ (dropdown + Other) */
+export const PROCEDURE_OPTIONS = [
+  { key: "echocardiogram", label: "Echocardiogram" },
+  { key: "intubation", label: "Intubation" },
+  { key: "abdominal_paracentesis", label: "Abdominal paracentesis" },
+  { key: "lumbar_puncture", label: "Lumbar puncture" },
+  { key: "kidney_biopsy", label: "Kidney biopsy" },
+  { key: "bone_marrow", label: "Bone marrow aspiration & biopsy" },
+  { key: "pleural_tapping", label: "Pleural tapping" },
+  { key: "icd_care", label: "ICD care" },
+  { key: "blood_transfusion", label: "Blood transfusion" },
+  { key: "chemotherapy", label: "Chemotherapy" },
+  { key: "arthrocentesis", label: "Arthrocentesis" },
+  { key: "inbody", label: "Inbody" },
+  { key: "pft", label: "PFT" },
+  { key: "ekg12", label: "EKG12leads" },
+  { key: "fibroscan", label: "Fibroscan" },
+  { key: "bedside_ultrasound", label: "Bed-side Ultrasound" },
+  { key: "holter", label: "Holter" },
+  { key: "c_line", label: "C-line" },
+  { key: "wound_care", label: "Wound/Bedsore care" },
+  { key: "egd", label: "EGD" },
+  { key: "colonoscopy", label: "Colonoscopy" },
+  { key: "other", label: "Other (ระบุเอง)" },
+] as const;
+
+export interface ProcedureAdminItem {
+  id: number;
+  date: string;
+  procedureKey: string;
+  procedureLabel: string;
+  count: number;
+}
+
+export interface ProcedureStatsResponse {
+  rows: { key: string; total: number }[];
+  byProcedure: { procedureKey: string; procedureLabel: string; count: number }[];
 }
 
 interface ApiError {
@@ -115,9 +155,21 @@ export function getStatsCached(from: string, to: string, group: GroupBy): StatsR
   return getClientCached<StatsResponse>(`/api/sheets?action=stats&from=${from}&to=${to}&group=${group}`);
 }
 
+export interface IpdByWardRow {
+  key: string;
+  ward: string;
+  admit: number;
+  discharge: number;
+  ao: number;
+}
+
+export async function getIpdByWard(from: string, to: string, group: GroupBy): Promise<{ rows: IpdByWardRow[] }> {
+  return fetchApi(`/api/sheets?action=ipdByWard&from=${from}&to=${to}&group=${group}`);
+}
+
 export async function addStatsRow(payload: {
   code: string;
-  sheetName: "OPD" | "Consult";
+  sheetName: "OPD" | "ER" | "Consult";
   date: string;
   count: number;
 }) {
@@ -128,7 +180,14 @@ export async function addStatsRow(payload: {
   });
 }
 
-export async function addIpdAdmit(payload: { code: string; hn: string; ward: string; admitDate: string }) {
+export async function addIpdAdmit(payload: {
+  code: string;
+  hn?: string;
+  ward: string;
+  admitDate: string;
+  stayType?: "admit" | "ao";
+  count?: number;
+}) {
   return fetchApi("/api/sheets", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -246,10 +305,11 @@ export async function postEncouragement(payload: { code: string; name: string; m
 
 export interface OpdAdminItem { id: number; date: string; count: number; }
 export interface ConsultAdminItem { id: number; date: string; count: number; }
-export interface IpdAdminItem { id: number; hn: string; ward: string; admitDate: string; dischargeDate: string; los: number; }
+export interface ErAdminItem { id: number; date: string; count: number; }
+export interface IpdAdminItem { id: number; hn: string; ward: string; admitDate: string; dischargeDate: string; los: number; stayType?: string; }
 export interface IpdOpenItem { id: number; hn: string; ward: string; admitDate: string; }
-export interface PatientDataAdmin { ipdOpen: IpdOpenItem[]; opd: OpdAdminItem[]; consult: ConsultAdminItem[]; ipd: IpdAdminItem[]; }
-export interface TodayEntries { opd: OpdAdminItem[]; consult: ConsultAdminItem[]; ipd: IpdAdminItem[]; }
+export interface PatientDataAdmin { ipdOpen: IpdOpenItem[]; opd: OpdAdminItem[]; er: ErAdminItem[]; consult: ConsultAdminItem[]; ipd: IpdAdminItem[]; }
+export interface TodayEntries { opd: OpdAdminItem[]; er: ErAdminItem[]; consult: ConsultAdminItem[]; ipd: IpdAdminItem[]; procedures?: ProcedureAdminItem[]; }
 
 export async function getPatientDataAdmin(code: string, date?: string): Promise<PatientDataAdmin> {
   let url = `/api/sheets?action=patientDataAdmin&code=${encodeURIComponent(code)}`;
@@ -258,6 +318,7 @@ export async function getPatientDataAdmin(code: string, date?: string): Promise<
   return {
     ipdOpen: Array.isArray(raw?.ipdOpen) ? raw.ipdOpen : [],
     opd: Array.isArray(raw?.opd) ? raw.opd : [],
+    er: Array.isArray((raw as { er?: ErAdminItem[] })?.er) ? (raw as { er: ErAdminItem[] }).er : [],
     consult: Array.isArray(raw?.consult) ? raw.consult : [],
     ipd: Array.isArray(raw?.ipd) ? raw.ipd : [],
   };
@@ -269,9 +330,23 @@ export async function getTodayEntries(code: string, date: string): Promise<Today
   );
   return {
     opd: Array.isArray(raw?.opd) ? raw.opd : [],
+    er: Array.isArray((raw as { er?: ErAdminItem[] })?.er) ? (raw as { er: ErAdminItem[] }).er : [],
     consult: Array.isArray(raw?.consult) ? raw.consult : [],
     ipd: Array.isArray(raw?.ipd) ? raw.ipd : [],
+    procedures: Array.isArray((raw as { procedures?: ProcedureAdminItem[] })?.procedures) ? (raw as { procedures: ProcedureAdminItem[] }).procedures : [],
   };
+}
+
+export async function getProcedureStats(from: string, to: string, group: GroupBy): Promise<ProcedureStatsResponse> {
+  return fetchApi(`/api/sheets?action=procedureStats&from=${from}&to=${to}&group=${group}`);
+}
+
+export async function addProcedure(payload: { code: string; date: string; procedureKey: string; procedureLabel?: string; count?: number }) {
+  return fetchApi("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "addProcedure", ...payload }),
+  });
 }
 
 export async function updateTodayRow(payload: Record<string, unknown>) {

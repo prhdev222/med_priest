@@ -56,26 +56,29 @@ async function getStats(db: D1Database, params: URLSearchParams) {
 
   const pk = (col: string) => periodExpr(group, col);
 
-  const [opdR, conR, admR, dcR, wardR, losR] = await Promise.all([
+  const admitFilter = "(stay_type = 'admit' OR stay_type IS NULL)";
+  const [opdR, erR, conR, admR, dcR, wardR, losR] = await Promise.all([
     db.prepare(`SELECT ${pk("date")} as key, SUM(count) as total FROM opd WHERE date BETWEEN ?1 AND ?2 GROUP BY key ORDER BY key`).bind(from, to).all(),
+    db.prepare(`SELECT ${pk("date")} as key, SUM(count) as total FROM er WHERE date BETWEEN ?1 AND ?2 GROUP BY key ORDER BY key`).bind(from, to).all(),
     db.prepare(`SELECT ${pk("date")} as key, SUM(count) as total FROM consult WHERE date BETWEEN ?1 AND ?2 GROUP BY key ORDER BY key`).bind(from, to).all(),
-    db.prepare(`SELECT ${pk("admit_date")} as key, COUNT(*) as total FROM ipd_stays WHERE admit_date BETWEEN ?1 AND ?2 GROUP BY key ORDER BY key`).bind(from, to).all(),
-    db.prepare(`SELECT ${pk("discharge_date")} as key, COUNT(*) as total FROM ipd_stays WHERE discharge_date BETWEEN ?1 AND ?2 AND discharge_date != '' GROUP BY key ORDER BY key`).bind(from, to).all(),
+    db.prepare(`SELECT ${pk("admit_date")} as key, COUNT(*) as total FROM ipd_stays WHERE ${admitFilter} AND admit_date BETWEEN ?1 AND ?2 GROUP BY key ORDER BY key`).bind(from, to).all(),
+    db.prepare(`SELECT ${pk("discharge_date")} as key, COUNT(*) as total FROM ipd_stays WHERE ${admitFilter} AND discharge_date BETWEEN ?1 AND ?2 AND discharge_date != '' GROUP BY key ORDER BY key`).bind(from, to).all(),
     db.prepare(`
       SELECT ward,
-        SUM(CASE WHEN admit_date BETWEEN ?1 AND ?2 THEN 1 ELSE 0 END) as admit,
-        SUM(CASE WHEN discharge_date BETWEEN ?1 AND ?2 AND discharge_date != '' THEN 1 ELSE 0 END) as discharge
+        SUM(CASE WHEN admit_date BETWEEN ?1 AND ?2 AND (stay_type = 'admit' OR stay_type IS NULL) THEN 1 ELSE 0 END) as admit,
+        SUM(CASE WHEN discharge_date BETWEEN ?1 AND ?2 AND discharge_date != '' AND (stay_type = 'admit' OR stay_type IS NULL) THEN 1 ELSE 0 END) as discharge
       FROM ipd_stays
       WHERE (admit_date BETWEEN ?1 AND ?2) OR (discharge_date BETWEEN ?1 AND ?2 AND discharge_date != '')
       GROUP BY ward ORDER BY ward
     `).bind(from, to).all(),
-    db.prepare(`SELECT AVG(los) as v FROM ipd_stays WHERE discharge_date BETWEEN ?1 AND ?2 AND discharge_date != '' AND los > 0`).bind(from, to).first<{ v: number | null }>(),
+    db.prepare(`SELECT AVG(los) as v FROM ipd_stays WHERE ${admitFilter} AND discharge_date BETWEEN ?1 AND ?2 AND discharge_date != '' AND los > 0`).bind(from, to).first<{ v: number | null }>(),
   ]);
 
-  const map: Record<string, { key: string; opd: number; consult: number; ipdAdmit: number; ipdDischarge: number }> = {};
-  const ensure = (k: string) => (map[k] ??= { key: k, opd: 0, consult: 0, ipdAdmit: 0, ipdDischarge: 0 });
+  const map: Record<string, { key: string; opd: number; er: number; consult: number; ipdAdmit: number; ipdDischarge: number }> = {};
+  const ensure = (k: string) => (map[k] ??= { key: k, opd: 0, er: 0, consult: 0, ipdAdmit: 0, ipdDischarge: 0 });
 
   for (const r of opdR.results) ensure(r.key as string).opd = r.total as number;
+  for (const r of erR.results) ensure(r.key as string).er = r.total as number;
   for (const r of conR.results) ensure(r.key as string).consult = r.total as number;
   for (const r of admR.results) ensure(r.key as string).ipdAdmit = r.total as number;
   for (const r of dcR.results) ensure(r.key as string).ipdDischarge = r.total as number;
@@ -84,6 +87,69 @@ async function getStats(db: D1Database, params: URLSearchParams) {
     rows: Object.keys(map).sort().map((k) => map[k]),
     wardStats: wardR.results.map((w) => ({ ward: w.ward, admit: w.admit, discharge: w.discharge })),
     avgLosDays: losR?.v ?? 0,
+  };
+}
+
+/** IPD แยกตาม key (วัน/สัปดาห์/เดือน/ปี) และ ward สำหรับกราฟเลือก Ward */
+async function getIpdByWard(db: D1Database, params: URLSearchParams) {
+  const from = params.get("from") || "";
+  const to = params.get("to") || "";
+  const group = params.get("group") || "day";
+  if (!from || !to) throw new Error("from/to ไม่ถูกต้อง");
+  const pk = (col: string) => periodExpr(group, col);
+
+  const admitFilter = "(stay_type = 'admit' OR stay_type IS NULL)";
+  const [admitR, dcR, aoR] = await Promise.all([
+    db.prepare(
+      `SELECT ${pk("admit_date")} as key, ward, COUNT(*) as total FROM ipd_stays WHERE ${admitFilter} AND admit_date BETWEEN ?1 AND ?2 GROUP BY 1, 2 ORDER BY 1, 2`
+    ).bind(from, to).all(),
+    db.prepare(
+      `SELECT ${pk("discharge_date")} as key, ward, COUNT(*) as total FROM ipd_stays WHERE ${admitFilter} AND discharge_date BETWEEN ?1 AND ?2 AND discharge_date != '' GROUP BY 1, 2 ORDER BY 1, 2`
+    ).bind(from, to).all(),
+    db.prepare(
+      `SELECT ${pk("admit_date")} as key, ward, COUNT(*) as total FROM ipd_stays WHERE stay_type = 'ao' AND admit_date BETWEEN ?1 AND ?2 GROUP BY 1, 2 ORDER BY 1, 2`
+    ).bind(from, to).all(),
+  ]);
+
+  const wardMap: Record<string, Record<string, { admit: number; discharge: number; ao: number }>> = {};
+  const ensure = (k: string, w: string) => {
+    if (!wardMap[k]) wardMap[k] = {};
+    if (!wardMap[k][w]) wardMap[k][w] = { admit: 0, discharge: 0, ao: 0 };
+    return wardMap[k][w];
+  };
+  for (const r of admitR.results) ensure(r.key as string, r.ward as string).admit = r.total as number;
+  for (const r of dcR.results) ensure(r.key as string, r.ward as string).discharge = r.total as number;
+  for (const r of aoR.results) ensure(r.key as string, r.ward as string).ao = r.total as number;
+
+  const rows: { key: string; ward: string; admit: number; discharge: number; ao: number }[] = [];
+  for (const key of Object.keys(wardMap).sort()) {
+    for (const ward of Object.keys(wardMap[key])) {
+      rows.push({ key, ward, ...wardMap[key][ward] });
+    }
+  }
+  return { rows };
+}
+
+/** หัตถการเฉพาะ: สถิติตามช่วง (สำหรับกราฟ) และแยกตามประเภท (pie) */
+async function getProcedureStats(db: D1Database, params: URLSearchParams) {
+  const from = params.get("from") || "";
+  const to = params.get("to") || "";
+  const group = params.get("group") || "day";
+  if (!from || !to) throw new Error("from/to ไม่ถูกต้อง");
+  const pk = (col: string) => periodExpr(group, col);
+
+  const [rowsR, byProcR] = await Promise.all([
+    db.prepare(
+      `SELECT ${pk("date")} as key, SUM(count) as total FROM procedures WHERE date BETWEEN ?1 AND ?2 GROUP BY 1 ORDER BY 1`
+    ).bind(from, to).all(),
+    db.prepare(
+      `SELECT procedure_key as procedureKey, procedure_label as procedureLabel, SUM(count) as count FROM procedures WHERE date BETWEEN ?1 AND ?2 GROUP BY procedure_key, procedure_label ORDER BY count DESC`
+    ).bind(from, to).all(),
+  ]);
+
+  return {
+    rows: rowsR.results.map((r) => ({ key: r.key, total: r.total })),
+    byProcedure: byProcR.results.map((r) => ({ procedureKey: r.procedureKey, procedureLabel: r.procedureLabel, count: r.count })),
   };
 }
 
@@ -101,7 +167,7 @@ async function getEncouragement(db: D1Database) {
 
 async function getIpdOpenCases(db: D1Database) {
   const r = await db.prepare(
-    `SELECT hn, ward, admit_date as admitDate FROM ipd_stays WHERE discharge_date = '' OR discharge_date IS NULL ORDER BY admit_date DESC`
+    `SELECT hn, ward, admit_date as admitDate FROM ipd_stays WHERE (stay_type = 'admit' OR stay_type IS NULL) AND (discharge_date = '' OR discharge_date IS NULL) ORDER BY admit_date DESC`
   ).all();
   return { rows: r.results };
 }
@@ -110,32 +176,36 @@ async function getPatientDataAdmin(db: D1Database, params: URLSearchParams) {
   const searchDate = params.get("date") || "";
 
   const ipdOpenR = await db.prepare(
-    `SELECT id, hn, ward, admit_date as admitDate FROM ipd_stays WHERE discharge_date = '' OR discharge_date IS NULL ORDER BY admit_date DESC`
+    `SELECT id, hn, ward, admit_date as admitDate FROM ipd_stays WHERE (stay_type = 'admit' OR stay_type IS NULL) AND (discharge_date = '' OR discharge_date IS NULL) ORDER BY admit_date DESC`
   ).all();
 
   if (!searchDate) {
-    return { ipdOpen: ipdOpenR.results, opd: [], consult: [], ipd: [] };
+    return { ipdOpen: ipdOpenR.results, opd: [], er: [], consult: [], ipd: [], procedures: [] };
   }
 
-  const [opdR, conR, ipdR] = await Promise.all([
+  const [opdR, erR, conR, ipdR, procR] = await Promise.all([
     db.prepare(`SELECT id, date, count FROM opd WHERE date = ?1 ORDER BY id DESC`).bind(searchDate).all(),
+    db.prepare(`SELECT id, date, count FROM er WHERE date = ?1 ORDER BY id DESC`).bind(searchDate).all(),
     db.prepare(`SELECT id, date, count FROM consult WHERE date = ?1 ORDER BY id DESC`).bind(searchDate).all(),
     db.prepare(
-      `SELECT id, hn, ward, admit_date as admitDate, discharge_date as dischargeDate, los FROM ipd_stays WHERE admit_date = ?1 OR discharge_date = ?1 ORDER BY id DESC`
+      `SELECT id, hn, ward, admit_date as admitDate, discharge_date as dischargeDate, los, stay_type as stayType FROM ipd_stays WHERE admit_date = ?1 OR discharge_date = ?1 ORDER BY id DESC`
     ).bind(searchDate).all(),
+    db.prepare(`SELECT id, date, procedure_key as procedureKey, procedure_label as procedureLabel, count FROM procedures WHERE date = ?1 ORDER BY id DESC`).bind(searchDate).all(),
   ]);
-  return { ipdOpen: ipdOpenR.results, opd: opdR.results, consult: conR.results, ipd: ipdR.results };
+  return { ipdOpen: ipdOpenR.results, opd: opdR.results, er: erR.results, consult: conR.results, ipd: ipdR.results, procedures: procR.results };
 }
 
 async function getTodayEntries(db: D1Database, today: string) {
-  const [opdR, conR, ipdR] = await Promise.all([
+  const [opdR, erR, conR, ipdR, procR] = await Promise.all([
     db.prepare(`SELECT id, date, count FROM opd WHERE date = ?1 ORDER BY id DESC`).bind(today).all(),
+    db.prepare(`SELECT id, date, count FROM er WHERE date = ?1 ORDER BY id DESC`).bind(today).all(),
     db.prepare(`SELECT id, date, count FROM consult WHERE date = ?1 ORDER BY id DESC`).bind(today).all(),
     db.prepare(
-      `SELECT id, hn, ward, admit_date as admitDate, discharge_date as dischargeDate, los FROM ipd_stays WHERE admit_date = ?1 ORDER BY id DESC`
+      `SELECT id, hn, ward, admit_date as admitDate, discharge_date as dischargeDate, los, stay_type as stayType FROM ipd_stays WHERE admit_date = ?1 ORDER BY id DESC`
     ).bind(today).all(),
+    db.prepare(`SELECT id, date, procedure_key as procedureKey, procedure_label as procedureLabel, count FROM procedures WHERE date = ?1 ORDER BY id DESC`).bind(today).all(),
   ]);
-  return { opd: opdR.results, consult: conR.results, ipd: ipdR.results };
+  return { opd: opdR.results, er: erR.results, consult: conR.results, ipd: ipdR.results, procedures: procR.results };
 }
 
 function todayStr(): string {
@@ -149,16 +219,21 @@ async function updateTodayRow(env: Env, body: Body) {
   const today = todayStr();
   if (!rowId) throw new Error("ไม่ระบุ rowId");
 
-  if (sheetType === "opd" || sheetType === "consult") {
-    const table = sheetType === "opd" ? "opd" : "consult";
+  if (sheetType === "opd" || sheetType === "consult" || sheetType === "er") {
+    const table = sheetType === "opd" ? "opd" : sheetType === "er" ? "er" : "consult";
     const r = await env.DB.prepare(`UPDATE ${table} SET count=?1 WHERE id=?2 AND date=?3`)
       .bind(Number(body.count || 0), rowId, today).run();
     if (r.meta.changes === 0) throw new Error("ไม่พบข้อมูลวันนี้ที่ต้องการแก้ไข");
+  } else if (sheetType === "procedure") {
+    const r = await env.DB.prepare(`UPDATE procedures SET procedure_key=?1, procedure_label=?2, count=?3 WHERE id=?4 AND date=?5`)
+      .bind(first(body.procedureKey), first(body.procedureLabel), Number(body.count || 1), rowId, today).run();
+    if (r.meta.changes === 0) throw new Error("ไม่พบข้อมูลวันนี้ที่ต้องการแก้ไข");
   } else if (sheetType === "ipd") {
-    const hn = first(body.hn);
+    const stayType = first(body.stayType) || "admit";
+    const hn = stayType === "ao" ? "" : first(body.hn);
     const ward = first(body.ward);
-    const r = await env.DB.prepare(`UPDATE ipd_stays SET hn=?1, ward=?2 WHERE id=?3 AND admit_date=?4`)
-      .bind(hn, ward, rowId, today).run();
+    const r = await env.DB.prepare(`UPDATE ipd_stays SET hn=?1, ward=?2, stay_type=?3 WHERE id=?4 AND admit_date=?5`)
+      .bind(hn, ward, stayType, rowId, today).run();
     if (r.meta.changes === 0) throw new Error("ไม่พบข้อมูลวันนี้ที่ต้องการแก้ไข");
   } else {
     throw new Error("sheetType ไม่ถูกต้อง");
@@ -175,8 +250,10 @@ async function deleteTodayRow(env: Env, body: Body) {
 
   const tableMap: Record<string, { table: string; dateCol: string }> = {
     opd: { table: "opd", dateCol: "date" },
+    er: { table: "er", dateCol: "date" },
     consult: { table: "consult", dateCol: "date" },
     ipd: { table: "ipd_stays", dateCol: "admit_date" },
+    procedure: { table: "procedures", dateCol: "date" },
   };
   const m = tableMap[sheetType];
   if (!m) throw new Error("sheetType ไม่ถูกต้อง");
@@ -191,21 +268,46 @@ async function deleteTodayRow(env: Env, body: Body) {
 async function addStatsRow(env: Env, body: Body) {
   checkUnit(env, first(body.code));
   const sheet = String(body.sheetName || "");
-  if (sheet !== "OPD" && sheet !== "Consult") throw new Error("sheetName ไม่ถูกต้อง");
-  const table = sheet === "OPD" ? "opd" : "consult";
+  const tableMap: Record<string, string> = { OPD: "opd", ER: "er", Consult: "consult" };
+  const table = tableMap[sheet];
+  if (!table) throw new Error("sheetName ไม่ถูกต้อง (OPD / ER / Consult)");
   await env.DB.prepare(`INSERT INTO ${table} (date, count) VALUES (?1, ?2)`)
     .bind(String(body.date || ""), Number(body.count || 0))
     .run();
   return { ok: true };
 }
 
+async function addProcedure(env: Env, body: Body) {
+  checkUnit(env, first(body.code));
+  const date = first(body.date) || todayStr();
+  const procedureKey = first(body.procedureKey);
+  if (!procedureKey) throw new Error("ระบุประเภทหัตถการ");
+  await env.DB.prepare(`INSERT INTO procedures (date, procedure_key, procedure_label, count) VALUES (?1, ?2, ?3, ?4)`)
+    .bind(date, procedureKey, first(body.procedureLabel), Number(body.count || 1))
+    .run();
+  return { ok: true };
+}
+
 async function addIpdAdmit(env: Env, body: Body) {
   checkUnit(env, first(body.code));
-  const hn = first(body.hn);
+  const stayType = first(body.stayType) || "admit";
   const ward = first(body.ward);
   const admitDate = first(body.admitDate);
-  if (!hn || !ward || !admitDate) throw new Error("ข้อมูลไม่ครบ");
-  await env.DB.prepare(`INSERT INTO ipd_stays (hn, ward, admit_date) VALUES (?1, ?2, ?3)`)
+
+  if (stayType === "ao") {
+    if (!ward || !admitDate) throw new Error("กรุณาเลือก Ward และวันที่");
+    const count = Math.max(1, Math.min(100, Number(body.count) || 1));
+    for (let i = 0; i < count; i++) {
+      await env.DB.prepare(`INSERT INTO ipd_stays (hn, ward, admit_date, stay_type) VALUES (?1, ?2, ?3, 'ao')`)
+        .bind("", ward, admitDate)
+        .run();
+    }
+    return { ok: true };
+  }
+
+  const hn = first(body.hn);
+  if (!hn || !ward || !admitDate) throw new Error("ข้อมูลไม่ครบ (HN, Ward, วันที่ Admit)");
+  await env.DB.prepare(`INSERT INTO ipd_stays (hn, ward, admit_date, stay_type) VALUES (?1, ?2, ?3, 'admit')`)
     .bind(hn, ward, admitDate)
     .run();
   return { ok: true };
@@ -218,7 +320,7 @@ async function addIpdDischarge(env: Env, body: Body) {
   if (!hn || !dischargeDate) throw new Error("ข้อมูลไม่ครบ");
 
   const row = await env.DB.prepare(
-    `SELECT id, admit_date FROM ipd_stays WHERE hn = ?1 AND (discharge_date = '' OR discharge_date IS NULL) ORDER BY admit_date DESC LIMIT 1`
+    `SELECT id, admit_date FROM ipd_stays WHERE hn = ?1 AND (stay_type = 'admit' OR stay_type IS NULL) AND (discharge_date = '' OR discharge_date IS NULL) ORDER BY admit_date DESC LIMIT 1`
   ).bind(hn).first<{ id: number; admit_date: string }>();
 
   if (!row) throw new Error("ไม่พบเคสค้างของ HN นี้");
@@ -265,8 +367,10 @@ async function deleteRow(env: Env, body: Body) {
     activities: "activities",
     encouragement: "encouragement",
     opd: "opd",
+    er: "er",
     consult: "consult",
     ipd: "ipd_stays",
+    procedure: "procedures",
   };
   const table = tableMap[sheetType];
   if (!table) throw new Error("sheetType ไม่ถูกต้อง");
@@ -294,25 +398,32 @@ async function updateRow(env: Env, body: Body) {
       .bind(first(body.date), first(body.name), first(body.message), rowId)
       .run();
     if (r.meta.changes === 0) throw new Error("ไม่พบข้อมูลที่ต้องการแก้ไข");
-  } else if (sheetType === "opd" || sheetType === "consult") {
-    const table = sheetType === "opd" ? "opd" : "consult";
+  } else if (sheetType === "opd" || sheetType === "consult" || sheetType === "er") {
+    const table = sheetType === "opd" ? "opd" : sheetType === "er" ? "er" : "consult";
     const r = await env.DB.prepare(`UPDATE ${table} SET date=?1, count=?2 WHERE id=?3`)
       .bind(first(body.date), Number(body.count || 0), rowId)
       .run();
     if (r.meta.changes === 0) throw new Error("ไม่พบข้อมูลที่ต้องการแก้ไข");
   } else if (sheetType === "ipd") {
-    const hn = first(body.hn);
+    const stayType = first(body.stayType) || "admit";
+    const hn = stayType === "ao" ? "" : first(body.hn);
     const ward = first(body.ward);
     const admitDate = first(body.admitDate);
-    const dischargeDate = first(body.dischargeDate);
-    let los = Number(body.los || 0);
-    if (admitDate && dischargeDate) {
+    const dischargeDate = stayType === "ao" ? "" : first(body.dischargeDate);
+    const los = stayType === "ao" ? 0 : Number(body.los || 0);
+    let finalLos = los;
+    if (stayType !== "ao" && admitDate && dischargeDate) {
       const ad = new Date(admitDate);
       const dd = new Date(dischargeDate);
-      los = Math.max(1, Math.round((dd.getTime() - ad.getTime()) / 86400000));
+      finalLos = Math.max(1, Math.round((dd.getTime() - ad.getTime()) / 86400000));
     }
-    const r = await env.DB.prepare(`UPDATE ipd_stays SET hn=?1, ward=?2, admit_date=?3, discharge_date=?4, los=?5 WHERE id=?6`)
-      .bind(hn, ward, admitDate, dischargeDate, los, rowId)
+    const r = await env.DB.prepare(`UPDATE ipd_stays SET hn=?1, ward=?2, admit_date=?3, discharge_date=?4, los=?5, stay_type=?6 WHERE id=?7`)
+      .bind(hn, ward, admitDate, dischargeDate, finalLos, stayType, rowId)
+      .run();
+    if (r.meta.changes === 0) throw new Error("ไม่พบข้อมูลที่ต้องการแก้ไข");
+  } else if (sheetType === "procedure") {
+    const r = await env.DB.prepare(`UPDATE procedures SET date=?1, procedure_key=?2, procedure_label=?3, count=?4 WHERE id=?5`)
+      .bind(first(body.date), first(body.procedureKey), first(body.procedureLabel), Number(body.count || 1), rowId)
       .run();
     if (r.meta.changes === 0) throw new Error("ไม่พบข้อมูลที่ต้องการแก้ไข");
   } else {
@@ -338,6 +449,10 @@ export default {
         switch (action) {
           case "stats":
             return json(await getStats(env.DB, p));
+          case "ipdByWard":
+            return json(await getIpdByWard(env.DB, p));
+          case "procedureStats":
+            return json(await getProcedureStats(env.DB, p));
           case "activities":
             return json(await getActivities(env.DB));
           case "activitiesAdmin":
@@ -369,6 +484,8 @@ export default {
         switch (action) {
           case "addStatsRow":
             return json(await addStatsRow(env, body));
+          case "addProcedure":
+            return json(await addProcedure(env, body));
           case "addIpdAdmit":
             return json(await addIpdAdmit(env, body));
           case "addIpdDischarge":

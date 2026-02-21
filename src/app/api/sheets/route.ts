@@ -45,8 +45,10 @@ export async function GET(req: NextRequest) {
   const url = new URL(SCRIPT_URL);
   req.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));
   const cacheKey = url.searchParams.toString();
+  const action = req.nextUrl.searchParams.get("action");
+  const skipCache = action === "procedureStats" || action === "ipdByWard";
 
-  const cached = getCached(cacheKey);
+  const cached = skipCache ? null : getCached(cacheKey);
   if (cached) {
     return new NextResponse(cached.text, {
       status: cached.status,
@@ -66,7 +68,7 @@ export async function GET(req: NextRequest) {
     });
     clearTimeout(timer);
     const text = await response.text();
-    putCache(cacheKey, text, response.status);
+    if (!skipCache) putCache(cacheKey, text, response.status);
     return new NextResponse(text, {
       status: response.status,
       headers: {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getStats, getStatsCached, GroupBy, StatsResponse } from "@/lib/api";
+import { getStats, getStatsCached, getIpdByWard, getProcedureStats, GroupBy, StatsResponse, IpdByWardRow, PROCEDURE_OPTIONS, ProcedureStatsResponse } from "@/lib/api";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import {
   Bar,
@@ -26,6 +26,15 @@ function startOfYearIso() {
   return `${d.getFullYear()}-01-01`;
 }
 
+/** คืนวันจันทร์ของสัปดาห์ที่ตรงกับ dateStr (สัปดาห์เริ่มจันทร์) */
+function startOfWeekMonday(dateStr: string): string {
+  const d = new Date(dateStr + "T00:00:00");
+  const day = d.getDay(); // 0=อาทิตย์, 1=จันทร์, ...
+  const back = (day + 6) % 7;
+  d.setDate(d.getDate() - back);
+  return d.toISOString().slice(0, 10);
+}
+
 function weekToDateRange(year: number, week: number): string {
   const jan1 = new Date(year, 0, 1);
   const startDay = (week - 1) * 7 + 1;
@@ -36,6 +45,75 @@ function weekToDateRange(year: number, week: number): string {
   end.setDate(Math.min(endDay, 365 + (year % 4 === 0 ? 1 : 0)));
   const fmt = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
   return `${fmt(start)}-${fmt(end)}`;
+}
+
+/** สัปดาห์ที่ 1 = 1-7 ม.ค., สัปดาห์ที่ 2 = 8-14 ม.ค., ... */
+function weekToFromTo(year: number, week: number): { from: string; to: string } {
+  const jan1 = new Date(year, 0, 1);
+  const start = new Date(jan1);
+  start.setDate(1 + (week - 1) * 7);
+  let end = new Date(start);
+  end.setDate(end.getDate() + 6);
+  const dec31 = new Date(year, 11, 31);
+  if (end > dec31) end = dec31;
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { from: fmt(start), to: fmt(end) };
+}
+
+function lastDayOfMonth(year: number, month: number): string {
+  const d = new Date(year, month, 0); // day 0 of next month = last day of month
+  return d.toISOString().slice(0, 10);
+}
+
+/** คืนค่า ISO week "YYYY-Www" ของวันที่ d (จันทร์–อาทิตย์) */
+function getISOWeekValue(d: Date): string {
+  const year = d.getFullYear();
+  const jan4 = new Date(year, 0, 4);
+  const mon1 = new Date(jan4);
+  mon1.setDate(jan4.getDate() - ((jan4.getDay() || 7) - 1));
+  const diff = Math.floor((d.getTime() - mon1.getTime()) / (24 * 60 * 60 * 1000));
+  const week = Math.floor(diff / 7) + 1;
+  if (week < 1) return `${year - 1}-W${String(getISOWeekNum(new Date(year - 1, 11, 31))).padStart(2, "0")}`;
+  if (week > 52) {
+    const dec31 = new Date(year, 11, 31);
+    const nextJan4 = new Date(year + 1, 0, 4);
+    if (d >= nextJan4) return `${year + 1}-W01`;
+    return `${year}-W${String(week).padStart(2, "0")}`;
+  }
+  return `${year}-W${String(week).padStart(2, "0")}`;
+}
+function getISOWeekNum(d: Date): number {
+  const year = d.getFullYear();
+  const jan4 = new Date(year, 0, 4);
+  const mon1 = new Date(jan4);
+  mon1.setDate(jan4.getDate() - ((jan4.getDay() || 7) - 1));
+  const diff = Math.floor((d.getTime() - mon1.getTime()) / (24 * 60 * 60 * 1000));
+  return Math.max(1, Math.min(53, Math.floor(diff / 7) + 1));
+}
+
+/** แปลงค่า input type="week" (YYYY-Www) เป็นช่วงจันทร์–อาทิตย์ */
+function isoWeekValueToFromTo(weekValue: string): { from: string; to: string } {
+  const match = weekValue.match(/^(\d{4})-W(\d{2})$/);
+  if (!match) return { from: todayIso(), to: todayIso() };
+  const year = parseInt(match[1], 10);
+  const week = parseInt(match[2], 10);
+  const jan4 = new Date(year, 0, 4);
+  const mon1 = new Date(jan4);
+  mon1.setDate(jan4.getDate() - ((jan4.getDay() || 7) - 1));
+  const fromDate = new Date(mon1);
+  fromDate.setDate(mon1.getDate() + (week - 1) * 7);
+  const toDate = new Date(fromDate);
+  toDate.setDate(toDate.getDate() + 6);
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  return { from: fmt(fromDate), to: fmt(toDate) };
+}
+
+const MONTH_NAMES = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+
+function getWeekOfYear(d: Date): number {
+  const start = new Date(d.getFullYear(), 0, 1);
+  const dayOfYear = Math.floor((d.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+  return Math.min(52, Math.ceil(dayOfYear / 7));
 }
 
 const DAY_NAMES_SHORT = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
@@ -58,8 +136,7 @@ function shortLabel(key: string, group: string): string {
   if (key.length <= 5) return key;
   const parts = key.split("-");
   if (parts.length === 3 && group === "day") {
-    const dow = getDayOfWeek(key);
-    return `${DAY_NAMES_SHORT[dow]} ${parts[2]}/${parts[1]}`;
+    return `${parts[2]}-${parts[1]}-${parts[0]}`;
   }
   if (parts.length === 2 && parts[1]?.startsWith("W")) {
     const yr = Number(parts[0]);
@@ -76,13 +153,13 @@ function shortLabel(key: string, group: string): string {
 }
 
 const mockRows = [
-  { key: "2026-02-10", opd: 22, consult: 3, ipdAdmit: 5, ipdDischarge: 4 },
-  { key: "2026-02-11", opd: 27, consult: 4, ipdAdmit: 6, ipdDischarge: 5 },
-  { key: "2026-02-12", opd: 24, consult: 2, ipdAdmit: 4, ipdDischarge: 3 },
-  { key: "2026-02-13", opd: 30, consult: 5, ipdAdmit: 7, ipdDischarge: 6 },
-  { key: "2026-02-14", opd: 26, consult: 4, ipdAdmit: 5, ipdDischarge: 6 },
-  { key: "2026-02-17", opd: 20, consult: 3, ipdAdmit: 3, ipdDischarge: 2 },
-  { key: "2026-02-18", opd: 25, consult: 2, ipdAdmit: 4, ipdDischarge: 5 },
+  { key: "2026-02-10", opd: 22, er: 5, consult: 3, ipdAdmit: 5, ipdDischarge: 4 },
+  { key: "2026-02-11", opd: 27, er: 6, consult: 4, ipdAdmit: 6, ipdDischarge: 5 },
+  { key: "2026-02-12", opd: 24, er: 4, consult: 2, ipdAdmit: 4, ipdDischarge: 3 },
+  { key: "2026-02-13", opd: 30, er: 7, consult: 5, ipdAdmit: 7, ipdDischarge: 6 },
+  { key: "2026-02-14", opd: 26, er: 3, consult: 4, ipdAdmit: 5, ipdDischarge: 6 },
+  { key: "2026-02-17", opd: 20, er: 5, consult: 3, ipdAdmit: 3, ipdDischarge: 2 },
+  { key: "2026-02-18", opd: 25, er: 4, consult: 2, ipdAdmit: 4, ipdDischarge: 5 },
 ];
 
 const WARD_COLORS = ["#2563eb", "#f59e0b", "#14b8a6", "#e11d48", "#8b5cf6", "#f97316"];
@@ -119,16 +196,59 @@ function DayColorLegend() {
   );
 }
 
+const CURRENT_YEAR = new Date().getFullYear();
+const CURRENT_MONTH = new Date().getMonth() + 1;
+const currentIsoWeek = getISOWeekValue(new Date());
+const currentYearMonth = `${CURRENT_YEAR}-${String(CURRENT_MONTH).padStart(2, "0")}`;
+
 export default function DashboardPage() {
-  const [from, setFrom] = useState(startOfYearIso());
-  const [to, setTo] = useState(todayIso());
   const [group, setGroup] = useState<GroupBy>("day");
+  const [filterDayFrom, setFilterDayFrom] = useState(startOfYearIso());
+  const [filterDayTo, setFilterDayTo] = useState(todayIso());
+  const [filterWeekFrom, setFilterWeekFrom] = useState(currentIsoWeek);
+  const [filterWeekTo, setFilterWeekTo] = useState(currentIsoWeek);
+  const [filterMonthFrom, setFilterMonthFrom] = useState(currentYearMonth);
+  const [filterMonthTo, setFilterMonthTo] = useState(currentYearMonth);
+  const [filterYear, setFilterYear] = useState(CURRENT_YEAR);
+  const [filterYearEnd, setFilterYearEnd] = useState(CURRENT_YEAR);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [useMock, setUseMock] = useState(false);
-  const [ipdView, setIpdView] = useState<"both" | "admit" | "dc">("both");
+  const [ipdShowAdmit, setIpdShowAdmit] = useState(true);
+  const [ipdShowDc, setIpdShowDc] = useState(true);
+  const [ipdShowAo, setIpdShowAo] = useState(true);
+  const [ipdWard1, setIpdWard1] = useState("");
+  const [ipdByWardData, setIpdByWardData] = useState<{ rows: IpdByWardRow[] }>({ rows: [] });
+  const [procedureStats, setProcedureStats] = useState<ProcedureStatsResponse>({ rows: [], byProcedure: [] });
+  const [procedurePieOpen, setProcedurePieOpen] = useState(false);
   const emptyData: StatsResponse = { rows: [], wardStats: [], avgLosDays: 0 };
   const [data, setData] = useState<StatsResponse>(emptyData);
+
+  const { from, to } = useMemo(() => {
+    if (group === "year") {
+      const y1 = Math.min(filterYear, filterYearEnd);
+      const y2 = Math.max(filterYear, filterYearEnd);
+      return { from: `${y1}-01-01`, to: `${y2}-12-31` };
+    }
+    if (group === "month") {
+      const a = filterMonthFrom.match(/^(\d{4})-(\d{2})$/);
+      const b = filterMonthTo.match(/^(\d{4})-(\d{2})$/);
+      if (!a || !b) return { from: filterMonthFrom + "-01", to: filterMonthTo + "-01" };
+      const fromStr = `${a[1]}-${a[2]}-01`;
+      const toStr = lastDayOfMonth(parseInt(b[1], 10), parseInt(b[2], 10));
+      return { from: fromStr, to: toStr };
+    }
+    if (group === "week") {
+      const a = isoWeekValueToFromTo(filterWeekFrom);
+      const b = isoWeekValueToFromTo(filterWeekTo);
+      return {
+        from: a.from < b.from ? a.from : b.from,
+        to: a.to > b.to ? a.to : b.to,
+      };
+    }
+    // day: ใช้ปฏิทิน (จาก–ถึง)
+    return { from: filterDayFrom, to: filterDayTo };
+  }, [group, filterDayFrom, filterDayTo, filterWeekFrom, filterWeekTo, filterMonthFrom, filterMonthTo, filterYear, filterYearEnd]);
 
   const safeParse = (res: StatsResponse): StatsResponse => ({
     rows: Array.isArray(res?.rows) ? res.rows : [],
@@ -139,12 +259,13 @@ export default function DashboardPage() {
   const fetchData = useCallback(() => {
     setLoading(true);
     setError("");
+    const fromReq = group === "day" ? startOfWeekMonday(from) : from;
 
-    const stale = getStatsCached(from, to, group);
+    const stale = getStatsCached(fromReq, to, group);
     if (stale) setData(safeParse(stale));
 
     let mounted = true;
-    getStats(from, to, group)
+    getStats(fromReq, to, group)
       .then((res) => mounted && setData(safeParse(res)))
       .catch((e) => mounted && setError(e.message))
       .finally(() => mounted && setLoading(false));
@@ -156,17 +277,130 @@ export default function DashboardPage() {
     return cleanup;
   }, [fetchData]);
 
+  useEffect(() => {
+    if (useMock) return;
+    const fromReq = group === "day" ? startOfWeekMonday(from) : from;
+    getIpdByWard(fromReq, to, group)
+      .then((res) => setIpdByWardData({ rows: Array.isArray(res?.rows) ? res.rows : [] }))
+      .catch(() => setIpdByWardData({ rows: [] }));
+  }, [from, to, group, useMock]);
+
+  useEffect(() => {
+    if (useMock) return;
+    const fromReq = group === "day" ? startOfWeekMonday(from) : from;
+    getProcedureStats(fromReq, to, group)
+      .then((res: ProcedureStatsResponse) => setProcedureStats({
+        rows: Array.isArray(res?.rows) ? res.rows : [],
+        byProcedure: Array.isArray(res?.byProcedure) ? res.byProcedure : [],
+      }))
+      .catch(() => setProcedureStats({ rows: [], byProcedure: [] }));
+  }, [from, to, group, useMock]);
+
   const safeRows = Array.isArray(data?.rows) ? data.rows : [];
   const safeWardStats = Array.isArray(data?.wardStats) ? data.wardStats : [];
   const viewRows = useMock ? mockRows : safeRows;
   const viewWardStats = useMock ? mockWardStats : safeWardStats;
   const viewLos = useMock ? 4.2 : Number(data.avgLosDays || 0);
 
+  const aoByKey = useMemo(() => {
+    const m: Record<string, number> = {};
+    for (const r of ipdByWardData.rows) {
+      const k = String(r.key);
+      m[k] = (m[k] ?? 0) + Number((r as { ao?: number }).ao ?? 0);
+    }
+    return m;
+  }, [ipdByWardData.rows]);
+
   const chartRows = useMemo(() => viewRows.map((r) => ({
     ...r,
+    opd: r.opd ?? 0,
+    er: r.er ?? 0,
+    consult: r.consult ?? 0,
+    ipdAdmit: r.ipdAdmit ?? 0,
+    ipdDischarge: r.ipdDischarge ?? 0,
+    ipdAo: aoByKey[r.key] ?? 0,
     label: shortLabel(r.key, group),
     dayIdx: group === "day" && r.key.length >= 10 ? getDayOfWeek(r.key) : -1,
-  })), [viewRows, group]);
+  })), [viewRows, group, aoByKey]);
+
+  const wardList = useMemo(() => {
+    const fromStats = (viewWardStats as { ward?: string }[]).map((w) => w.ward as string).filter(Boolean);
+    const fromIpdByWard = ipdByWardData.rows.map((r) => r.ward).filter(Boolean);
+    const allWards = Array.from(new Set([...fromStats, ...fromIpdByWard])).sort();
+    return ["ทั้งหมด", ...allWards];
+  }, [viewWardStats, ipdByWardData.rows]);
+
+  const effectiveIpdByWardRows = useMemo(() => {
+    if (useMock) {
+      const n = viewWardStats.length;
+      if (n === 0) return [];
+      return chartRows.flatMap((r) => {
+        const admitTotal = r.ipdAdmit ?? 0;
+        const dcTotal = r.ipdDischarge ?? 0;
+        const admitPer = Math.floor(admitTotal / n);
+        const dcPer = Math.floor(dcTotal / n);
+        return viewWardStats.map((w, i) => ({
+          key: String(r.key),
+          ward: String((w as { ward?: string }).ward ?? ""),
+          admit: i < n - 1 ? admitPer : admitTotal - admitPer * (n - 1),
+          discharge: i < n - 1 ? dcPer : dcTotal - dcPer * (n - 1),
+          ao: 0,
+        }));
+      });
+    }
+    return ipdByWardData.rows.map((x) => ({
+      key: String(x.key),
+      ward: String(x.ward),
+      admit: Number(x.admit ?? 0),
+      discharge: Number(x.discharge ?? 0),
+      ao: Number((x as { ao?: number }).ao ?? 0),
+    }));
+  }, [useMock, chartRows, viewWardStats, ipdByWardData.rows]);
+
+  const getWardVal = useCallback(
+    (key: string, ward: string, type: "admit" | "discharge" | "ao") => {
+      const r = effectiveIpdByWardRows.find((x) => String(x.key) === String(key) && String(x.ward) === String(ward));
+      if (!r) return 0;
+      if (type === "admit") return r.admit;
+      if (type === "discharge") return r.discharge;
+      return r.ao ?? 0;
+    },
+    [effectiveIpdByWardRows],
+  );
+
+  const ipdChartRows = useMemo(() => {
+    const base = chartRows.map((r) => ({ ...r }));
+    if (!ipdWard1 || ipdWard1 === "ทั้งหมด") return base;
+    return base.map((row) => {
+      const out = { ...row } as Record<string, unknown>;
+      out[`${ipdWard1} (Admit)`] = getWardVal(row.key, ipdWard1, "admit");
+      out[`${ipdWard1} (D/C)`] = getWardVal(row.key, ipdWard1, "discharge");
+      out[`${ipdWard1} (A/O)`] = getWardVal(row.key, ipdWard1, "ao");
+      return out;
+    });
+  }, [chartRows, ipdWard1, getWardVal]);
+
+  const ipdWardChartHasData = useMemo(() => {
+    if (!ipdWard1 || ipdWard1 === "ทั้งหมด") return true;
+    const keys: string[] = [];
+    if (ipdShowAdmit) keys.push(`${ipdWard1} (Admit)`);
+    if (ipdShowDc) keys.push(`${ipdWard1} (D/C)`);
+    if (ipdShowAo) keys.push(`${ipdWard1} (A/O)`);
+    if (keys.length === 0) return true;
+    const sum = ipdChartRows.reduce((s, row) => {
+      const r = row as Record<string, unknown>;
+      return s + keys.reduce((a, k) => a + (Number(r[k]) || 0), 0);
+    }, 0);
+    return sum > 0;
+  }, [ipdChartRows, ipdWard1, ipdShowAdmit, ipdShowDc, ipdShowAo]);
+
+  const ipdViewLabel = useMemo(() => {
+    const parts: string[] = [];
+    if (ipdShowAdmit) parts.push("Admit");
+    if (ipdShowDc) parts.push("D/C");
+    if (ipdShowAo) parts.push("A/O");
+    return parts.length === 0 ? "—" : parts.join(" / ");
+  }, [ipdShowAdmit, ipdShowDc, ipdShowAo]);
 
   const wardPieData = useMemo(() => {
     const totalAdmit = viewWardStats.reduce((s, w) => s + (w.admit as number), 0);
@@ -180,16 +414,40 @@ export default function DashboardPage() {
       }));
   }, [viewWardStats]);
 
+  const procedureChartRows = useMemo(() => {
+    return procedureStats.rows.map((r) => ({
+      ...r,
+      label: shortLabel(r.key, group),
+    }));
+  }, [procedureStats.rows, group]);
+
+  const procedurePieData = useMemo(() => {
+    const list = procedureStats.byProcedure;
+    const total = list.reduce((s, p) => s + Number(p.count || 0), 0);
+    if (total === 0) return [];
+    return list.map((p) => {
+      const name = p.procedureKey === "other"
+        ? (p.procedureLabel ? `Other: ${p.procedureLabel}` : "Other")
+        : (PROCEDURE_OPTIONS.find((o) => o.key === p.procedureKey)?.label ?? p.procedureKey);
+      return {
+        name,
+        value: Number(p.count || 0),
+        pct: Math.round((Number(p.count || 0) / total) * 100),
+      };
+    });
+  }, [procedureStats.byProcedure]);
+
   const totals = useMemo(() => {
     return viewRows.reduce(
       (acc, row) => {
-        acc.opd += row.opd;
-        acc.consult += row.consult;
-        acc.ipdAdmit += row.ipdAdmit;
-        acc.ipdDischarge += row.ipdDischarge;
+        acc.opd += row.opd ?? 0;
+        acc.er += row.er ?? 0;
+        acc.consult += row.consult ?? 0;
+        acc.ipdAdmit += row.ipdAdmit ?? 0;
+        acc.ipdDischarge += row.ipdDischarge ?? 0;
         return acc;
       },
-      { opd: 0, consult: 0, ipdAdmit: 0, ipdDischarge: 0 },
+      { opd: 0, er: 0, consult: 0, ipdAdmit: 0, ipdDischarge: 0 },
     );
   }, [viewRows]);
 
@@ -198,11 +456,11 @@ export default function DashboardPage() {
 
   function exportCsv() {
     const bom = "\uFEFF";
-    const header = "วันที่,OPD,Consult,IPD Admit,IPD D/C\n";
-    const rows = viewRows.map((r) => `${r.key},${r.opd},${r.consult},${r.ipdAdmit},${r.ipdDischarge}`).join("\n");
+    const header = "วันที่,OPD,ER ผู้ป่วยนอก,Consult,IPD Admit,IPD D/C\n";
+    const rows = viewRows.map((r) => `${r.key},${r.opd ?? 0},${r.er ?? 0},${r.consult ?? 0},${r.ipdAdmit ?? 0},${r.ipdDischarge ?? 0}`).join("\n");
     const wardHeader = "\n\nWard,Admit,D/C\n";
     const wardRows = viewWardStats.map((w) => `${w.ward},${w.admit},${w.discharge}`).join("\n");
-    const summary = `\n\nสรุป ${from} ถึง ${to}\nOPD รวม,${totals.opd}\nConsult รวม,${totals.consult}\nIPD Admit รวม,${totals.ipdAdmit}\nIPD D/C รวม,${totals.ipdDischarge}\nAvg LOS,${viewLos.toFixed(1)} วัน`;
+    const summary = `\n\nสรุป ${from} ถึง ${to}\nOPD รวม,${totals.opd}\nER ผู้ป่วยนอก รวม,${totals.er}\nConsult รวม,${totals.consult}\nIPD Admit รวม,${totals.ipdAdmit}\nIPD D/C รวม,${totals.ipdDischarge}\nAvg LOS,${viewLos.toFixed(1)} วัน`;
     const blob = new Blob([bom + header + rows + wardHeader + wardRows + summary], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -222,19 +480,11 @@ export default function DashboardPage() {
 
       <div className="page-header" data-range={rangeText}>
         <h1>📊 Dashboard อายุรกรรม รพ.สงฆ์</h1>
-        <p>สรุปจำนวนผู้ป่วย OPD / Consult / IPD</p>
+        <p>สรุปจำนวนผู้ป่วย OPD / ER ผู้ป่วยนอก / Consult / IPD</p>
         <p className="print-range">ข้อมูล: {rangeText}</p>
       </div>
 
       <div className="control-row" style={{ position: "relative", zIndex: 10000 }}>
-        <label>
-          ตั้งแต่วันที่
-          <input type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
-        </label>
-        <label>
-          ถึงวันที่
-          <input type="date" value={to} onChange={(e) => setTo(e.target.value)} />
-        </label>
         <label>
           แสดงกราฟแบบ
           <select value={group} onChange={(e) => setGroup(e.target.value as GroupBy)}>
@@ -244,6 +494,31 @@ export default function DashboardPage() {
             <option value="year">รวมเป็นปี</option>
           </select>
         </label>
+        {/* ตัวกรองตามระดับ: วัน → เดือน, สัปดาห์ → สัปดาห์, เดือน → เดือน, ปี → ปี */}
+        {group === "day" && (
+          <>
+            <label>ตั้งแต่วันที่ <input type="date" value={filterDayFrom} onChange={(e) => setFilterDayFrom(e.target.value)} /></label>
+            <label>ถึงวันที่ <input type="date" value={filterDayTo} onChange={(e) => setFilterDayTo(e.target.value)} /></label>
+          </>
+        )}
+        {group === "week" && (
+          <>
+            <label>ตั้งแต่สัปดาห์ <input type="week" value={filterWeekFrom} onChange={(e) => setFilterWeekFrom(e.target.value)} title="เลือกสัปดาห์" /></label>
+            <label>ถึงสัปดาห์ <input type="week" value={filterWeekTo} onChange={(e) => setFilterWeekTo(e.target.value)} title="เลือกสัปดาห์" /></label>
+          </>
+        )}
+        {group === "month" && (
+          <>
+            <label>ตั้งแต่เดือน <input type="month" value={filterMonthFrom} onChange={(e) => setFilterMonthFrom(e.target.value)} title="เลือกปี-เดือน" /></label>
+            <label>ถึงเดือน <input type="month" value={filterMonthTo} onChange={(e) => setFilterMonthTo(e.target.value)} title="เลือกปี-เดือน" /></label>
+          </>
+        )}
+        {group === "year" && (
+          <>
+            <label>ตั้งแต่ปี <input type="number" min={2020} max={2032} value={filterYear} onChange={(e) => setFilterYear(Number(e.target.value) || CURRENT_YEAR)} style={{ width: 72 }} title="ปี พ.ศ. ลบ 543" /></label>
+            <label>ถึงปี <input type="number" min={2020} max={2032} value={filterYearEnd} onChange={(e) => setFilterYearEnd(Number(e.target.value) || CURRENT_YEAR)} style={{ width: 72 }} title="ปี พ.ศ. ลบ 543" /></label>
+          </>
+        )}
         <label>
           โหมด
           <select value={useMock ? "mock" : "real"} onChange={(e) => setUseMock(e.target.value === "mock")}>
@@ -279,6 +554,11 @@ export default function DashboardPage() {
           <div className="stat-card-label">OPD</div>
           <div className="stat-card-value">{totals.opd.toLocaleString()}</div>
         </div>
+        <div className="stat-card orange">
+          <div className="stat-card-icon">🚑</div>
+          <div className="stat-card-label">ER ผู้ป่วยนอก</div>
+          <div className="stat-card-value">{totals.er.toLocaleString()}</div>
+        </div>
         <div className="stat-card teal">
           <div className="stat-card-icon">📞</div>
           <div className="stat-card-label">Consult</div>
@@ -309,10 +589,29 @@ export default function DashboardPage() {
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
             <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-            <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.key || ""} />
+            <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} />
             <Bar dataKey="opd" name="OPD" radius={[4, 4, 0, 0]}>
               {chartRows.map((entry, i) => (
                 <Cell key={i} fill={entry.dayIdx >= 0 ? DAY_COLORS[entry.dayIdx] : "#2563eb"} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+        {group === "day" && <DayColorLegend />}
+      </div>
+
+      {/* ─── Chart: ER ผู้ป่วยนอก ─── */}
+      <div className="chart-card">
+        <h3 className="chart-title">🚑 ER ผู้ป่วยนอก <span className="chart-range">{rangeText}</span></h3>
+        <ResponsiveContainer width="100%" height={chartH}>
+          <BarChart data={chartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+            <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+            <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} />
+            <Bar dataKey="er" name="ER" radius={[4, 4, 0, 0]}>
+              {chartRows.map((entry, i) => (
+                <Cell key={i} fill={entry.dayIdx >= 0 ? DAY_COLORS[entry.dayIdx] : "#f97316"} />
               ))}
             </Bar>
           </BarChart>
@@ -328,7 +627,7 @@ export default function DashboardPage() {
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
             <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-            <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.key || ""} />
+            <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} />
             <Bar dataKey="consult" name="Consult" radius={[4, 4, 0, 0]}>
               {chartRows.map((entry, i) => (
                 <Cell key={i} fill={entry.dayIdx >= 0 ? DAY_COLORS[entry.dayIdx] : "#14b8a6"} />
@@ -339,25 +638,56 @@ export default function DashboardPage() {
         {group === "day" && <DayColorLegend />}
       </div>
 
-      {/* ─── Chart: IPD Admit/DC ตามช่วงเวลา ─── */}
+      {/* ─── Chart: IPD Admit/DC ตามช่วงเวลา (แยกตาม Ward ได้) ─── */}
       <div className="chart-card">
         <div className="chart-header">
-          <h3 className="chart-title">🛏️ IPD {ipdView === "both" ? "Admit / D/C" : ipdView === "admit" ? "Admit" : "D/C"} <span className="chart-range">{rangeText}</span></h3>
-          <div className="chart-filter">
-            <button className={`chart-filter-btn${ipdView === "both" ? " active" : ""}`} onClick={() => setIpdView("both")}>เทียบกัน</button>
-            <button className={`chart-filter-btn${ipdView === "admit" ? " active" : ""}`} onClick={() => setIpdView("admit")}>Admit</button>
-            <button className={`chart-filter-btn${ipdView === "dc" ? " active" : ""}`} onClick={() => setIpdView("dc")}>D/C</button>
+          <h3 className="chart-title">🛏️ IPD {ipdViewLabel} <span className="chart-range">{rangeText}</span></h3>
+          <div className="chart-filter" style={{ flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ fontSize: 12 }}>Ward</span>
+              <select value={ipdWard1} onChange={(e) => setIpdWard1(e.target.value)} style={{ fontSize: 12, padding: "2px 6px" }}>
+                {wardList.map((w) => (
+                  <option key={w} value={w === "ทั้งหมด" ? "" : w}>{w}</option>
+                ))}
+              </select>
+            </label>
+            <span style={{ fontSize: 12, marginRight: 4 }}>แสดง:</span>
+            <button type="button" className={`chart-filter-btn${ipdShowAdmit ? " active" : ""}`} onClick={() => setIpdShowAdmit((v) => !v)}>Admit</button>
+            <button type="button" className={`chart-filter-btn${ipdShowDc ? " active" : ""}`} onClick={() => setIpdShowDc((v) => !v)}>D/C</button>
+            <button type="button" className={`chart-filter-btn${ipdShowAo ? " active" : ""}`} onClick={() => setIpdShowAo((v) => !v)}>A/O</button>
           </div>
         </div>
+        {!useMock && ipdWard1 && ipdWard1 !== "ทั้งหมด" && effectiveIpdByWardRows.length === 0 && (
+          <p style={{ textAlign: "center", color: "var(--muted)", padding: 12, fontSize: 13 }}>
+            ยังไม่มีข้อมูลแยก Ward — กรุณา deploy Worker ล่าสุด (มี action ipdByWard) แล้วรีเฟรช
+          </p>
+        )}
+        {ipdWard1 && ipdWard1 !== "ทั้งหมด" && !ipdWardChartHasData && effectiveIpdByWardRows.length > 0 && (
+          <p style={{ textAlign: "center", color: "var(--muted)", padding: 12, fontSize: 13 }}>
+            ไม่มีข้อมูล {ipdViewLabel} สำหรับ Ward ที่เลือกในช่วงนี้ ลองเปลี่ยน Ward หรือช่วงวันที่
+          </p>
+        )}
         <ResponsiveContainer width="100%" height={chartH}>
-          <BarChart data={chartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+          <BarChart data={ipdChartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-            <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.key || ""} />
-            {ipdView === "both" && <Legend wrapperStyle={{ fontSize: 12 }} />}
-            {(ipdView === "both" || ipdView === "admit") && <Bar dataKey="ipdAdmit" fill="#f59e0b" name="Admit" radius={[4, 4, 0, 0]} />}
-            {(ipdView === "both" || ipdView === "dc") && <Bar dataKey="ipdDischarge" fill="#22c55e" name="D/C" radius={[4, 4, 0, 0]} />}
+            <YAxis tick={{ fontSize: 11 }} allowDecimals={false} domain={[0, "auto"]} />
+            <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} />
+            {(!ipdWard1 || ipdWard1 === "ทั้งหมด") ? (
+              <>
+                {(ipdShowAdmit || ipdShowDc || ipdShowAo) && <Legend wrapperStyle={{ fontSize: 12 }} />}
+                {ipdShowAdmit && <Bar dataKey="ipdAdmit" fill="#f59e0b" name="Admit" radius={[4, 4, 0, 0]} />}
+                {ipdShowDc && <Bar dataKey="ipdDischarge" fill="#22c55e" name="D/C" radius={[4, 4, 0, 0]} />}
+                {ipdShowAo && <Bar dataKey="ipdAo" fill="#8b5cf6" name="A/O (รวมทุก Ward)" radius={[4, 4, 0, 0]} />}
+              </>
+            ) : (
+              <>
+                <Legend wrapperStyle={{ fontSize: 12 }} />
+                {ipdShowAdmit && <Bar dataKey={`${ipdWard1} (Admit)`} fill="#f59e0b" name={`${ipdWard1} (Admit)`} radius={[4, 4, 0, 0]} minPointSize={2} />}
+                {ipdShowDc && <Bar dataKey={`${ipdWard1} (D/C)`} fill="#22c55e" name={`${ipdWard1} (D/C)`} radius={[4, 4, 0, 0]} minPointSize={2} />}
+                {ipdShowAo && <Bar dataKey={`${ipdWard1} (A/O)`} fill="#8b5cf6" name={`${ipdWard1} (A/O)`} radius={[4, 4, 0, 0]} minPointSize={2} />}
+              </>
+            )}
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -398,6 +728,86 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
+          </>
+        )}
+      </div>
+
+      {/* ─── Chart: หัตถการเฉพาะ ตามช่วงเวลา ─── */}
+      <div className="chart-card">
+        <h3 className="chart-title">🩺 จำนวนหัตถการเฉพาะ ต่อช่วงเวลา <span className="chart-range">{rangeText}</span></h3>
+        {procedureChartRows.length === 0 ? (
+          <p style={{ textAlign: "center", color: "var(--muted)", padding: 20 }}>ไม่มีข้อมูลหัตถการในช่วงนี้</p>
+        ) : (
+          <ResponsiveContainer width="100%" height={chartH}>
+            <BarChart data={procedureChartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+              <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} formatter={(v: number) => [`${v} ครั้ง`, "หัตถการ"]} />
+              <Bar dataKey="total" name="หัตถการ (ครั้ง)" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+
+      {/* ─── Pie Chart: สัดส่วนหัตถการ (พับได้) ─── */}
+      <div className="chart-card">
+        <button
+          type="button"
+          onClick={() => setProcedurePieOpen((v) => !v)}
+          style={{
+            width: "100%",
+            textAlign: "left",
+            background: "none",
+            border: "none",
+            padding: 0,
+            cursor: "pointer",
+          }}
+        >
+          <h3 className="chart-title">
+            🩺 สัดส่วนหัตถการเฉพาะ แยกตามประเภท <span className="chart-range">{rangeText}</span>
+            <span style={{ marginLeft: 8, fontSize: 12, color: "var(--muted)" }}>
+              {procedurePieOpen ? "▼ คลิกเพื่อซ่อน" : "▶ คลิกเพื่อแสดง"}
+            </span>
+          </h3>
+        </button>
+        {procedurePieOpen && (
+          <>
+            {procedurePieData.length === 0 ? (
+              <p style={{ textAlign: "center", color: "var(--muted)", padding: 20 }}>ไม่มีข้อมูลหัตถการในช่วงนี้</p>
+            ) : (
+              <>
+                <ResponsiveContainer width="100%" height={300}>
+                  <PieChart>
+                    <Pie
+                      data={procedurePieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={50}
+                      outerRadius={100}
+                      paddingAngle={3}
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ name, pct }) => `${name} ${pct}%`}
+                    >
+                      {procedurePieData.map((_, i) => (
+                        <Cell key={i} fill={WARD_COLORS[i % WARD_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number, name: string) => [`${value} ครั้ง`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="ward-legend">
+                  {procedurePieData.map((w, i) => (
+                    <div key={w.name} className="ward-legend-item">
+                      <span className="ward-legend-dot" style={{ background: WARD_COLORS[i % WARD_COLORS.length] }} />
+                      <span className="ward-legend-name">{w.name}</span>
+                      <span className="ward-legend-val">{w.value} ครั้ง ({w.pct}%)</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
           </>
         )}
       </div>

@@ -8,6 +8,12 @@ CREATE TABLE IF NOT EXISTS opd (
   count INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS er (
+  id    INTEGER PRIMARY KEY AUTOINCREMENT,
+  date  TEXT NOT NULL,
+  count INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS consult (
   id    INTEGER PRIMARY KEY AUTOINCREMENT,
   date  TEXT NOT NULL,
@@ -20,7 +26,8 @@ CREATE TABLE IF NOT EXISTS ipd_stays (
   ward           TEXT NOT NULL,
   admit_date     TEXT NOT NULL,
   discharge_date TEXT DEFAULT '',
-  los            INTEGER DEFAULT 0
+  los            INTEGER DEFAULT 0,
+  stay_type      TEXT DEFAULT 'admit'
 );
 
 CREATE TABLE IF NOT EXISTS activities (
@@ -42,8 +49,19 @@ CREATE TABLE IF NOT EXISTS encouragement (
   message TEXT DEFAULT ''
 );
 
+-- หัตถการเฉพาะ (ใน Ward/ER/OPD/Consult แผนกอายุรกรรม)
+CREATE TABLE IF NOT EXISTS procedures (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  date            TEXT NOT NULL,
+  procedure_key   TEXT NOT NULL,
+  procedure_label TEXT DEFAULT '',
+  count           INTEGER NOT NULL DEFAULT 1
+);
+
 -- Indexes for fast date-range queries
 CREATE INDEX IF NOT EXISTS idx_opd_date ON opd(date);
 CREATE INDEX IF NOT EXISTS idx_consult_date ON consult(date);
+CREATE INDEX IF NOT EXISTS idx_er_date ON er(date);
 CREATE INDEX IF NOT EXISTS idx_ipd_admit ON ipd_stays(admit_date);
 CREATE INDEX IF NOT EXISTS idx_ipd_discharge ON ipd_stays(discharge_date);
+CREATE INDEX IF NOT EXISTS idx_procedures_date ON procedures(date);
