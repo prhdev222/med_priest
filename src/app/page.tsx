@@ -454,14 +454,49 @@ export default function DashboardPage() {
   const chartH = 260;
   const rangeText = `${from} ถึง ${to}`;
 
+  const hasNoData =
+    !useMock &&
+    !loading &&
+    (chartRows.length === 0 ||
+      (totals.opd === 0 && totals.er === 0 && totals.consult === 0 && totals.ipdAdmit === 0 && totals.ipdDischarge === 0));
+
   function exportCsv() {
     const bom = "\uFEFF";
-    const header = "วันที่,OPD,ER ผู้ป่วยนอก,Consult,IPD Admit,IPD D/C\n";
-    const rows = viewRows.map((r) => `${r.key},${r.opd ?? 0},${r.er ?? 0},${r.consult ?? 0},${r.ipdAdmit ?? 0},${r.ipdDischarge ?? 0}`).join("\n");
-    const wardHeader = "\n\nWard,Admit,D/C\n";
-    const wardRows = viewWardStats.map((w) => `${w.ward},${w.admit},${w.discharge}`).join("\n");
-    const summary = `\n\nสรุป ${from} ถึง ${to}\nOPD รวม,${totals.opd}\nER ผู้ป่วยนอก รวม,${totals.er}\nConsult รวม,${totals.consult}\nIPD Admit รวม,${totals.ipdAdmit}\nIPD D/C รวม,${totals.ipdDischarge}\nAvg LOS,${viewLos.toFixed(1)} วัน`;
-    const blob = new Blob([bom + header + rows + wardHeader + wardRows + summary], { type: "text/csv;charset=utf-8;" });
+    const noteRow =
+      hasNoData
+        ? "หมายเหตุ: ไม่มีข้อมูลในช่วงนี้ กรุณาตรวจสอบการเชื่อมต่อ Backend (.env.local SCRIPT_URL) หรือใส่ข้อมูลจากหน้า Data Entry ก่อน\n"
+        : "";
+    const header = "วันที่,OPD,ER ผู้ป่วยนอก,Consult,IPD Admit,IPD D/C,IPD A/O\n";
+    const rows = chartRows.map((r) => `${r.key},${r.opd ?? 0},${r.er ?? 0},${r.consult ?? 0},${r.ipdAdmit ?? 0},${r.ipdDischarge ?? 0},${r.ipdAo ?? 0}`).join("\n");
+
+    const wardAgg: Record<string, { admit: number; discharge: number; ao: number }> = {};
+    for (const r of ipdByWardData.rows) {
+      const ward = String(r.ward ?? "");
+      if (!ward) continue;
+      if (!wardAgg[ward]) wardAgg[ward] = { admit: 0, discharge: 0, ao: 0 };
+      wardAgg[ward].admit += Number(r.admit ?? 0);
+      wardAgg[ward].discharge += Number(r.discharge ?? 0);
+      wardAgg[ward].ao += Number(r.ao ?? 0);
+    }
+    const wardHeader = "\n\nWard,Admit,D/C,A/O\n";
+    const wardRows = Object.keys(wardAgg)
+      .sort()
+      .map((ward) => `${ward},${wardAgg[ward].admit},${wardAgg[ward].discharge},${wardAgg[ward].ao}`)
+      .join("\n");
+
+    const totalAo = chartRows.reduce((s, r) => s + (r.ipdAo ?? 0), 0);
+    const totalProcedure = procedureStats.rows.reduce((s, r) => s + (r.total ?? 0), 0);
+    const summary = `\n\nสรุป ${from} ถึง ${to}\nOPD รวม,${totals.opd}\nER ผู้ป่วยนอก รวม,${totals.er}\nConsult รวม,${totals.consult}\nIPD Admit รวม,${totals.ipdAdmit}\nIPD D/C รวม,${totals.ipdDischarge}\nIPD A/O รวม,${totalAo}\nAvg LOS,${viewLos.toFixed(1)} วัน\nหัตถการเฉพาะ รวม,${totalProcedure} ครั้ง`;
+
+    let procedureSection = "";
+    if (procedureStats.rows.length > 0) {
+      procedureSection = "\n\nหัตถการเฉพาะ ต่อช่วง\nช่วง,จำนวนครั้ง\n" + procedureStats.rows.map((r) => `${r.key},${r.total ?? 0}`).join("\n");
+    }
+    if (procedurePieData.length > 0) {
+      procedureSection += "\n\nหัตถการเฉพาะ แยกตามประเภท\nประเภท,จำนวนครั้ง,สัดส่วน(%)\n" + procedurePieData.map((p) => `"${String(p.name).replace(/"/g, '""')}",${p.value},${p.pct}`).join("\n");
+    }
+
+    const blob = new Blob([bom + noteRow + header + rows + wardHeader + wardRows + procedureSection + summary], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -539,6 +574,13 @@ export default function DashboardPage() {
           <button onClick={fetchData} style={{ marginLeft: 8, padding: "4px 14px", fontSize: "0.85rem" }}>
             ลองใหม่
           </button>
+        </div>
+      )}
+
+      {hasNoData && (
+        <div className="entry-msg" style={{ maxWidth: "none", background: "#fef3c7", color: "#92400e" }}>
+          ไม่มีข้อมูลในช่วงวันที่เลือก — กรุณาตรวจสอบว่า <strong>.env.local</strong> ตั้งค่า <strong>SCRIPT_URL</strong> ชี้ไปที่ Backend (Cloudflare Worker) ที่ถูกต้อง และมีข้อมูลใน D1 หรือ{" "}
+          <a href="/data-entry" style={{ fontWeight: "bold", textDecoration: "underline" }}>กรอกข้อมูลจากหน้า Data Entry</a> ก่อน
         </div>
       )}
 
