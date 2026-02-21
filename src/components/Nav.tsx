@@ -18,6 +18,7 @@ const staffLinks = [
 export default function Nav() {
   const pathname = usePathname();
   const [staffOpen, setStaffOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
 
   const isStaffPage = staffLinks.some((l) => pathname === l.href);
@@ -32,13 +33,29 @@ export default function Nav() {
     return () => document.removeEventListener("mousedown", close);
   }, []);
 
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [pathname]);
+
   return (
-    <nav className="top-nav">
+    <nav className={`top-nav${mobileOpen ? " nav-mobile-open" : ""}`}>
       <div className="top-nav-inner">
         <Link href="/" className="top-nav-brand">
           <span className="top-nav-brand-icon">🏥</span>
           <span className="top-nav-brand-text">MED Priest</span>
         </Link>
+
+        <button
+          type="button"
+          className="nav-hamburger"
+          onClick={() => setMobileOpen(!mobileOpen)}
+          aria-label={mobileOpen ? "ปิดเมนู" : "เปิดเมนู"}
+          aria-expanded={mobileOpen}
+        >
+          <span className="nav-hamburger-line" />
+          <span className="nav-hamburger-line" />
+          <span className="nav-hamburger-line" />
+        </button>
 
         <div className="top-nav-links">
           {displayLinks.map((item) => (
@@ -78,6 +95,32 @@ export default function Nav() {
             )}
           </div>
         </div>
+      </div>
+
+      <div className="top-nav-mobile-menu">
+        {displayLinks.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`top-nav-mobile-link${pathname === item.href ? " active" : ""}`}
+            onClick={() => setMobileOpen(false)}
+          >
+            <span className="nav-icon">{item.icon}</span>
+            {item.label}
+          </Link>
+        ))}
+        <div className="top-nav-mobile-divider" />
+        {staffLinks.map((item) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`top-nav-mobile-link${pathname === item.href ? " active" : ""}`}
+            onClick={() => setMobileOpen(false)}
+          >
+            <span className="nav-icon">{item.icon}</span>
+            {item.label}
+          </Link>
+        ))}
       </div>
     </nav>
   );

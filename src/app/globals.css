@@ -125,6 +125,83 @@ a:hover { text-decoration: underline; }
 
 .nav-chevron.open { transform: rotate(180deg); }
 
+/* Hamburger: ซ่อนบน desktop */
+.nav-hamburger {
+  display: none;
+  flex-direction: column;
+  justify-content: center;
+  gap: 5px;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 10px;
+  cursor: pointer;
+  color: #fff;
+  transition: background 0.2s;
+}
+.nav-hamburger:hover { background: rgba(255, 255, 255, 0.15); }
+.nav-hamburger-line {
+  display: block;
+  width: 22px;
+  height: 2.5px;
+  background: currentColor;
+  border-radius: 2px;
+  transition: transform 0.2s, opacity 0.2s;
+}
+.top-nav.nav-mobile-open .nav-hamburger-line:nth-child(1) {
+  transform: translateY(7.5px) rotate(45deg);
+}
+.top-nav.nav-mobile-open .nav-hamburger-line:nth-child(2) {
+  opacity: 0;
+}
+.top-nav.nav-mobile-open .nav-hamburger-line:nth-child(3) {
+  transform: translateY(-7.5px) rotate(-45deg);
+}
+
+/* Mobile menu panel */
+.top-nav-mobile-menu {
+  display: none;
+  flex-direction: column;
+  padding: 12px 0 16px;
+  gap: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  margin-top: 4px;
+}
+.top-nav-mobile-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  color: #cbd5e1;
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 500;
+  border-radius: 10px;
+  transition: background 0.15s, color 0.15s;
+}
+.top-nav-mobile-link:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.top-nav-mobile-link.active {
+  background: var(--primary);
+  color: #fff;
+}
+.top-nav-mobile-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 8px 16px;
+}
+
+@media (max-width: 768px) {
+  .nav-hamburger { display: flex; }
+  .top-nav-links { display: none; }
+  .top-nav.nav-mobile-open .top-nav-mobile-menu { display: flex; }
+  .top-nav-inner { flex-wrap: wrap; }
+}
+
 .nav-dropdown {
   position: relative;
 }
