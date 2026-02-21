@@ -9,6 +9,8 @@ import {
   ConsultAdminItem,
   IpdAdminItem,
   IpdOpenItem,
+  ProcedureAdminItem,
+  PROCEDURE_OPTIONS,
   addActivity,
   deleteRow,
   getActivitiesAdmin,
@@ -38,6 +40,7 @@ export default function AdminPage() {
   const [searchEr, setSearchEr] = useState<ErAdminItem[]>([]);
   const [searchCon, setSearchCon] = useState<ConsultAdminItem[]>([]);
   const [searchIpd, setSearchIpd] = useState<IpdAdminItem[]>([]);
+  const [searchProcedures, setSearchProcedures] = useState<ProcedureAdminItem[]>([]);
   const [searched, setSearched] = useState(false);
 
   // Activity form
@@ -48,7 +51,9 @@ export default function AdminPage() {
 
   // Patient inline edit
   const [editIpd, setEditIpd] = useState<IpdAdminItem | null>(null);
-  const [eIpdForm, setEIpdForm] = useState({ hn: "", ward: wards[0], admitDate: "", dischargeDate: "" });
+  const [eIpdForm, setEIpdForm] = useState({ hn: "", ward: wards[0], admitDate: "", dischargeDate: "", stayType: "admit" as "admit" | "ao" });
+  const [editProcedure, setEditProcedure] = useState<ProcedureAdminItem | null>(null);
+  const [eProcForm, setEProcForm] = useState({ date: "", procedureKey: "", procedureLabel: "", count: 1 });
   const [editOpd, setEditOpd] = useState<OpdAdminItem | null>(null);
   const [eOpdForm, setEOpdForm] = useState({ date: "", count: 0 });
   const [editEr, setEditEr] = useState<ErAdminItem | null>(null);
@@ -84,6 +89,7 @@ export default function AdminPage() {
       setSearchEr(p.er || []);
       setSearchCon(p.consult || []);
       setSearchIpd(p.ipd || []);
+      setSearchProcedures(p.procedures || []);
       setIpdOpen(p.ipdOpen || []);
       setSearched(true);
     } catch (err) {
@@ -127,6 +133,25 @@ export default function AdminPage() {
       await updateRow({ code: adminCode, sheetType: "ipd", rowId: String(editIpd.id), ...eIpdForm });
       setEditIpd(null); flash("แก้ไข IPD สำเร็จ");
       if (searched) await doSearch(); else await loadBase(adminCode);
+    } catch (err) { setError((err as Error).message); setLoading(false); }
+  }
+
+  async function saveProcedure(e: FormEvent) {
+    e.preventDefault();
+    if (!editProcedure) return;
+    try {
+      setLoading(true);
+      await updateRow({
+        code: adminCode,
+        sheetType: "procedure",
+        rowId: String(editProcedure.id),
+        date: eProcForm.date,
+        procedureKey: eProcForm.procedureKey,
+        procedureLabel: eProcForm.procedureLabel || (PROCEDURE_OPTIONS.find((o) => o.key === eProcForm.procedureKey)?.label ?? ""),
+        count: eProcForm.count,
+      });
+      setEditProcedure(null); flash("แก้ไขหัตถการสำเร็จ");
+      if (searched) await doSearch();
     } catch (err) { setError((err as Error).message); setLoading(false); }
   }
 
@@ -260,7 +285,7 @@ export default function AdminPage() {
                         <td>{r.admitDate}</td>
                         <td>
                           <div style={{ display: "flex", gap: 4 }}>
-                            <button className="btn-sm btn-edit" onClick={() => { setEditIpd(r as unknown as IpdAdminItem); setEIpdForm({ hn: r.hn, ward: r.ward, admitDate: r.admitDate, dischargeDate: "" }); }}>แก้ไข</button>
+                            <button className="btn-sm btn-edit" onClick={() => { setEditIpd(r as unknown as IpdAdminItem); setEIpdForm({ hn: r.hn, ward: r.ward, admitDate: r.admitDate, dischargeDate: "", stayType: "admit" }); }}>แก้ไข</button>
                             <button className="btn-sm btn-delete" onClick={() => delPatient("ipd", r.id)}>ลบ</button>
                           </div>
                         </td>
@@ -272,22 +297,31 @@ export default function AdminPage() {
             )}
           </div>
 
-          {/* Edit IPD form */}
+          {/* Edit IPD form (เมื่อกดแก้ไขจากตาราง Open Cases หรือผลค้นหา) */}
           {editIpd && (
             <div className="admin-card">
               <h2 className="admin-card-title">✏️ แก้ไข IPD #{editIpd.id}</h2>
               <form onSubmit={saveIpd} className="admin-form">
+                <div className="field-group">
+                  <label>ประเภท</label>
+                  <select value={eIpdForm.stayType} onChange={(e) => setEIpdForm({ ...eIpdForm, stayType: e.target.value as "admit" | "ao" })}>
+                    <option value="admit">Admit (มี HN)</option>
+                    <option value="ao">A/O</option>
+                  </select>
+                </div>
+                {eIpdForm.stayType === "admit" && (
+                  <div className="field-grid-2">
+                    <div className="field-group"><label>HN</label><input value={eIpdForm.hn} onChange={(e) => setEIpdForm({ ...eIpdForm, hn: e.target.value })} required /></div>
+                    <div className="field-group"><label>วัน D/C (ว่างได้)</label><input type="date" value={eIpdForm.dischargeDate} onChange={(e) => setEIpdForm({ ...eIpdForm, dischargeDate: e.target.value })} /></div>
+                  </div>
+                )}
                 <div className="field-grid-2">
-                  <div className="field-group"><label>HN</label><input value={eIpdForm.hn} onChange={(e) => setEIpdForm({ ...eIpdForm, hn: e.target.value })} required /></div>
                   <div className="field-group"><label>Ward</label>
                     <select value={eIpdForm.ward} onChange={(e) => setEIpdForm({ ...eIpdForm, ward: e.target.value })}>
                       {wards.map((w) => <option key={w} value={w}>{w}</option>)}
                     </select>
                   </div>
-                </div>
-                <div className="field-grid-2">
                   <div className="field-group"><label>วัน Admit</label><input type="date" value={eIpdForm.admitDate} onChange={(e) => setEIpdForm({ ...eIpdForm, admitDate: e.target.value })} required /></div>
-                  <div className="field-group"><label>วัน D/C (ว่างได้)</label><input type="date" value={eIpdForm.dischargeDate} onChange={(e) => setEIpdForm({ ...eIpdForm, dischargeDate: e.target.value })} /></div>
                 </div>
                 <div className="admin-form-actions">
                   <button type="submit">💾 บันทึก</button>
@@ -310,7 +344,7 @@ export default function AdminPage() {
 
             {searched && (
               <div style={{ marginTop: 16 }}>
-                {searchOpd.length === 0 && searchEr.length === 0 && searchCon.length === 0 && searchIpd.length === 0 ? (
+                {searchOpd.length === 0 && searchEr.length === 0 && searchCon.length === 0 && searchIpd.length === 0 && searchProcedures.length === 0 ? (
                   <p className="admin-empty">ไม่พบข้อมูลวันที่ {searchDate}</p>
                 ) : (
                   <>
@@ -399,15 +433,85 @@ export default function AdminPage() {
                     {searchIpd.length > 0 && (
                       <>
                         <h3 style={{ marginTop: 16 }}>🛏️ IPD ({searchIpd.length})</h3>
+                        {editIpd && (
+                          <form onSubmit={saveIpd} className="admin-form" style={{ marginBottom: 10, padding: 12, background: "var(--surface-soft)", borderRadius: 10, border: "1px solid var(--border)" }}>
+                            <div className="field-group">
+                              <label>ประเภท</label>
+                              <select value={eIpdForm.stayType} onChange={(e) => setEIpdForm({ ...eIpdForm, stayType: e.target.value as "admit" | "ao" })}>
+                                <option value="admit">Admit (มี HN)</option>
+                                <option value="ao">A/O</option>
+                              </select>
+                            </div>
+                            {eIpdForm.stayType === "admit" && (
+                              <>
+                                <div className="field-group"><label>HN</label><input value={eIpdForm.hn} onChange={(e) => setEIpdForm({ ...eIpdForm, hn: e.target.value })} required /></div>
+                                <div className="field-group"><label>D/C วันที่</label><input type="date" value={eIpdForm.dischargeDate} onChange={(e) => setEIpdForm({ ...eIpdForm, dischargeDate: e.target.value })} /></div>
+                              </>
+                            )}
+                            <div className="field-grid-2">
+                              <div className="field-group"><label>Ward</label><select value={eIpdForm.ward} onChange={(e) => setEIpdForm({ ...eIpdForm, ward: e.target.value })}>{wards.map((w) => <option key={w} value={w}>{w}</option>)}</select></div>
+                              <div className="field-group"><label>วันที่ Admit</label><input type="date" value={eIpdForm.admitDate} onChange={(e) => setEIpdForm({ ...eIpdForm, admitDate: e.target.value })} required /></div>
+                            </div>
+                            <div className="admin-form-actions"><button type="submit">💾 บันทึก</button><button type="button" className="btn-secondary" onClick={() => setEditIpd(null)}>ยกเลิก</button></div>
+                          </form>
+                        )}
                         <table>
-                          <thead><tr><th>ID</th><th>HN</th><th>Ward</th><th>Admit</th><th>D/C</th><th>LOS</th><th>จัดการ</th></tr></thead>
+                          <thead><tr><th>ID</th><th>ประเภท</th><th>HN</th><th>Ward</th><th>Admit</th><th>D/C</th><th>LOS</th><th>จัดการ</th></tr></thead>
                           <tbody>
                             {searchIpd.map((r) => (
                               <tr key={r.id}>
-                                <td>{r.id}</td><td><strong>{r.hn}</strong></td><td>{r.ward}</td><td>{r.admitDate}</td><td>{r.dischargeDate || "—"}</td><td>{r.los || "—"}</td>
+                                <td>{r.id}</td>
+                                <td><span style={{ background: (r.stayType === "ao" ? "#dbeafe" : "#fef3c7"), padding: "2px 8px", borderRadius: 6 }}>{(r.stayType === "ao" ? "A/O" : "Admit")}</span></td>
+                                <td><strong>{r.stayType === "ao" ? "—" : (r.hn || "—")}</strong></td>
+                                <td>{r.ward}</td>
+                                <td>{r.admitDate}</td>
+                                <td>{r.dischargeDate || "—"}</td>
+                                <td>{r.los ?? "—"}</td>
                                 <td><div style={{ display: "flex", gap: 4 }}>
-                                  <button className="btn-sm btn-edit" onClick={() => { setEditIpd(r); setEIpdForm({ hn: r.hn, ward: r.ward, admitDate: r.admitDate, dischargeDate: r.dischargeDate || "" }); }}>แก้ไข</button>
+                                  <button className="btn-sm btn-edit" onClick={() => { setEditIpd(r); setEIpdForm({ hn: r.hn || "", ward: r.ward, admitDate: r.admitDate, dischargeDate: r.dischargeDate || "", stayType: (r.stayType === "ao" ? "ao" : "admit") as "admit" | "ao" }); }}>แก้ไข</button>
                                   <button className="btn-sm btn-delete" onClick={() => delPatient("ipd", r.id)}>ลบ</button>
+                                </div></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </>
+                    )}
+
+                    {/* หัตถการเฉพาะ */}
+                    {searchProcedures.length > 0 && (
+                      <>
+                        <h3 style={{ marginTop: 16 }}>🔬 หัตถการเฉพาะ ({searchProcedures.length})</h3>
+                        {editProcedure && (
+                          <form onSubmit={saveProcedure} className="admin-form" style={{ marginBottom: 10, padding: 12, background: "var(--surface-soft)", borderRadius: 10, border: "1px solid var(--border)" }}>
+                            <div className="field-grid-2">
+                              <div className="field-group"><label>วันที่</label><input type="date" value={eProcForm.date} onChange={(e) => setEProcForm({ ...eProcForm, date: e.target.value })} required /></div>
+                              <div className="field-group"><label>ประเภทหัตถการ</label>
+                                <select value={eProcForm.procedureKey} onChange={(e) => setEProcForm({ ...eProcForm, procedureKey: e.target.value, procedureLabel: PROCEDURE_OPTIONS.find((o) => o.key === e.target.value)?.label ?? "" })} required>
+                                  <option value="">-- เลือก --</option>
+                                  {PROCEDURE_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+                                </select>
+                              </div>
+                            </div>
+                            <div className="field-grid-2">
+                              <div className="field-group"><label>ชื่อแสดง (ถ้า Other)</label><input value={eProcForm.procedureLabel} onChange={(e) => setEProcForm({ ...eProcForm, procedureLabel: e.target.value })} placeholder="ระบุเอง" /></div>
+                              <div className="field-group"><label>จำนวนครั้ง</label><input type="number" min={1} value={eProcForm.count} onChange={(e) => setEProcForm({ ...eProcForm, count: Number(e.target.value) || 1 })} /></div>
+                            </div>
+                            <div className="admin-form-actions"><button type="submit">💾 บันทึก</button><button type="button" className="btn-secondary" onClick={() => setEditProcedure(null)}>ยกเลิก</button></div>
+                          </form>
+                        )}
+                        <table>
+                          <thead><tr><th>ID</th><th>วันที่</th><th>หัตถการ</th><th>จำนวน</th><th>จัดการ</th></tr></thead>
+                          <tbody>
+                            {searchProcedures.map((r) => (
+                              <tr key={r.id}>
+                                <td>{r.id}</td>
+                                <td>{r.date}</td>
+                                <td><strong>{r.procedureLabel || r.procedureKey}</strong></td>
+                                <td>{r.count}</td>
+                                <td><div style={{ display: "flex", gap: 4 }}>
+                                  <button className="btn-sm btn-edit" onClick={() => { setEditProcedure(r); setEProcForm({ date: r.date, procedureKey: r.procedureKey, procedureLabel: r.procedureLabel || "", count: r.count }); }}>แก้ไข</button>
+                                  <button className="btn-sm btn-delete" onClick={() => delPatient("procedure", r.id)}>ลบ</button>
                                 </div></td>
                               </tr>
                             ))}

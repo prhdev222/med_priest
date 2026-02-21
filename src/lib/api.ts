@@ -308,19 +308,27 @@ export interface ConsultAdminItem { id: number; date: string; count: number; }
 export interface ErAdminItem { id: number; date: string; count: number; }
 export interface IpdAdminItem { id: number; hn: string; ward: string; admitDate: string; dischargeDate: string; los: number; stayType?: string; }
 export interface IpdOpenItem { id: number; hn: string; ward: string; admitDate: string; }
-export interface PatientDataAdmin { ipdOpen: IpdOpenItem[]; opd: OpdAdminItem[]; er: ErAdminItem[]; consult: ConsultAdminItem[]; ipd: IpdAdminItem[]; }
+export interface PatientDataAdmin {
+  ipdOpen: IpdOpenItem[];
+  opd: OpdAdminItem[];
+  er: ErAdminItem[];
+  consult: ConsultAdminItem[];
+  ipd: IpdAdminItem[];
+  procedures: ProcedureAdminItem[];
+}
 export interface TodayEntries { opd: OpdAdminItem[]; er: ErAdminItem[]; consult: ConsultAdminItem[]; ipd: IpdAdminItem[]; procedures?: ProcedureAdminItem[]; }
 
 export async function getPatientDataAdmin(code: string, date?: string): Promise<PatientDataAdmin> {
   let url = `/api/sheets?action=patientDataAdmin&code=${encodeURIComponent(code)}`;
   if (date) url += `&date=${date}`;
-  const raw = await fetchApi<PatientDataAdmin>(url);
+  const raw = await fetchApi<PatientDataAdmin & { procedures?: ProcedureAdminItem[] }>(url);
   return {
     ipdOpen: Array.isArray(raw?.ipdOpen) ? raw.ipdOpen : [],
     opd: Array.isArray(raw?.opd) ? raw.opd : [],
     er: Array.isArray((raw as { er?: ErAdminItem[] })?.er) ? (raw as { er: ErAdminItem[] }).er : [],
     consult: Array.isArray(raw?.consult) ? raw.consult : [],
     ipd: Array.isArray(raw?.ipd) ? raw.ipd : [],
+    procedures: Array.isArray(raw?.procedures) ? raw.procedures : [],
   };
 }
 
