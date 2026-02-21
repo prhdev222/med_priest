@@ -12,6 +12,16 @@ INSERT INTO opd (date, count) VALUES ('2026-02-17', 26);
 INSERT INTO opd (date, count) VALUES ('2026-02-18', 24);
 INSERT INTO opd (date, count) VALUES ('2026-02-19', 27);
 
+-- ER ผู้ป่วยนอก (ห้องฉุกเฉิน)
+INSERT INTO er (date, count) VALUES ('2026-02-10', 5);
+INSERT INTO er (date, count) VALUES ('2026-02-11', 6);
+INSERT INTO er (date, count) VALUES ('2026-02-12', 4);
+INSERT INTO er (date, count) VALUES ('2026-02-13', 7);
+INSERT INTO er (date, count) VALUES ('2026-02-14', 3);
+INSERT INTO er (date, count) VALUES ('2026-02-17', 5);
+INSERT INTO er (date, count) VALUES ('2026-02-18', 4);
+INSERT INTO er (date, count) VALUES ('2026-02-19', 6);
+
 -- Consult (ปรึกษานอกแผนก)
 INSERT INTO consult (date, count) VALUES ('2026-02-10', 3);
 INSERT INTO consult (date, count) VALUES ('2026-02-11', 4);

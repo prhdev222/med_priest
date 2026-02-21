@@ -5,6 +5,7 @@ import {
   ActivityItem,
   EncouragementItem,
   OpdAdminItem,
+  ErAdminItem,
   ConsultAdminItem,
   IpdAdminItem,
   IpdOpenItem,
@@ -34,6 +35,7 @@ export default function AdminPage() {
   const [ipdOpen, setIpdOpen] = useState<IpdOpenItem[]>([]);
   const [searchDate, setSearchDate] = useState("");
   const [searchOpd, setSearchOpd] = useState<OpdAdminItem[]>([]);
+  const [searchEr, setSearchEr] = useState<ErAdminItem[]>([]);
   const [searchCon, setSearchCon] = useState<ConsultAdminItem[]>([]);
   const [searchIpd, setSearchIpd] = useState<IpdAdminItem[]>([]);
   const [searched, setSearched] = useState(false);
@@ -49,6 +51,8 @@ export default function AdminPage() {
   const [eIpdForm, setEIpdForm] = useState({ hn: "", ward: wards[0], admitDate: "", dischargeDate: "" });
   const [editOpd, setEditOpd] = useState<OpdAdminItem | null>(null);
   const [eOpdForm, setEOpdForm] = useState({ date: "", count: 0 });
+  const [editEr, setEditEr] = useState<ErAdminItem | null>(null);
+  const [eErForm, setEErForm] = useState({ date: "", count: 0 });
   const [editCon, setEditCon] = useState<ConsultAdminItem | null>(null);
   const [eConForm, setEConForm] = useState({ date: "", count: 0 });
 
@@ -77,6 +81,7 @@ export default function AdminPage() {
     try {
       const p = await getPatientDataAdmin(adminCode, searchDate);
       setSearchOpd(p.opd || []);
+      setSearchEr(p.er || []);
       setSearchCon(p.consult || []);
       setSearchIpd(p.ipd || []);
       setIpdOpen(p.ipdOpen || []);
@@ -132,7 +137,22 @@ export default function AdminPage() {
       setLoading(true);
       await updateRow({ code: adminCode, sheetType: "opd", rowId: String(editOpd.id), ...eOpdForm });
       setEditOpd(null); flash("แก้ไข OPD สำเร็จ"); await doSearch();
-    } catch (err) { setError((err as Error).message); setLoading(false); }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+  async function saveEr(e: FormEvent) {
+    e.preventDefault();
+    if (!editEr) return;
+    setError("");
+    try {
+      setLoading(true);
+      await updateRow({ code: adminCode, sheetType: "er", rowId: String(editEr.id), ...eErForm });
+      setEditEr(null); flash("แก้ไข ER สำเร็จ"); await doSearch();
+    } catch (err) { setError((err as Error).message); }
+    finally { setLoading(false); }
   }
 
   async function saveCon(e: FormEvent) {
@@ -290,7 +310,7 @@ export default function AdminPage() {
 
             {searched && (
               <div style={{ marginTop: 16 }}>
-                {searchOpd.length === 0 && searchCon.length === 0 && searchIpd.length === 0 ? (
+                {searchOpd.length === 0 && searchEr.length === 0 && searchCon.length === 0 && searchIpd.length === 0 ? (
                   <p className="admin-empty">ไม่พบข้อมูลวันที่ {searchDate}</p>
                 ) : (
                   <>
@@ -314,6 +334,33 @@ export default function AdminPage() {
                               <tr key={r.id}>
                                 <td>{r.id}</td><td>{r.date}</td><td><strong>{r.count}</strong></td>
                                 <td><div style={{ display: "flex", gap: 4 }}><button className="btn-sm btn-edit" onClick={() => { setEditOpd(r); setEOpdForm({ date: r.date, count: r.count }); }}>แก้ไข</button><button className="btn-sm btn-delete" onClick={() => delPatient("opd", r.id)}>ลบ</button></div></td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </>
+                    )}
+
+                    {/* ER results */}
+                    {searchEr.length > 0 && (
+                      <>
+                        <h3 style={{ marginTop: 16 }}>🚑 ER ผู้ป่วยนอก ({searchEr.length})</h3>
+                        {editEr && (
+                          <form onSubmit={saveEr} className="admin-form" style={{ marginBottom: 10, padding: 12, background: "var(--surface-soft)", borderRadius: 10, border: "1px solid var(--border)" }}>
+                            <div className="field-grid-2">
+                              <div className="field-group"><label>วันที่</label><input type="date" value={eErForm.date} onChange={(e) => setEErForm({ ...eErForm, date: e.target.value })} required /></div>
+                              <div className="field-group"><label>จำนวน</label><input type="number" min={0} value={eErForm.count} onChange={(e) => setEErForm({ ...eErForm, count: Number(e.target.value) })} required /></div>
+                            </div>
+                            <div className="admin-form-actions"><button type="submit">💾 บันทึก</button><button type="button" className="btn-secondary" onClick={() => setEditEr(null)}>ยกเลิก</button></div>
+                          </form>
+                        )}
+                        <table>
+                          <thead><tr><th>ID</th><th>วันที่</th><th>จำนวน</th><th>จัดการ</th></tr></thead>
+                          <tbody>
+                            {searchEr.map((r) => (
+                              <tr key={r.id}>
+                                <td>{r.id}</td><td>{r.date}</td><td><strong>{r.count}</strong></td>
+                                <td><div style={{ display: "flex", gap: 4 }}><button className="btn-sm btn-edit" onClick={() => { setEditEr(r); setEErForm({ date: r.date, count: r.count }); }}>แก้ไข</button><button className="btn-sm btn-delete" onClick={() => delPatient("er", r.id)}>ลบ</button></div></td>
                               </tr>
                             ))}
                           </tbody>

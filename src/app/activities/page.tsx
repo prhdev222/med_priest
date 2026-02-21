@@ -28,6 +28,7 @@ export default function ActivitiesPage() {
   const [rows, setRows] = useState<ActivityItem[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [lightbox, setLightbox] = useState<{ src: string; alt: string } | null>(null);
   const loadedRef = useRef(false);
 
   useEffect(() => {
@@ -39,6 +40,17 @@ export default function ActivitiesPage() {
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setLightbox(null); };
+    document.addEventListener("keydown", onKey);
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = "";
+    };
+  }, [lightbox]);
 
   return (
     <section>
@@ -65,21 +77,28 @@ export default function ActivitiesPage() {
           return (
             <article key={item.id} className="activity-card">
               {img && (
-                <img
-                  src={img}
-                  alt={item.imageCaption || item.title}
-                  referrerPolicy="no-referrer"
-                  onError={(e) => {
-                    const el = e.currentTarget;
-                    if (!el.dataset.retry) {
-                      el.dataset.retry = "1";
-                      const fid = img.split("/d/")[1];
-                      if (fid) el.src = `https://drive.google.com/thumbnail?id=${fid}&sz=w800`;
-                    } else {
-                      el.style.display = "none";
-                    }
-                  }}
-                />
+                <button
+                  type="button"
+                  className="activity-image-wrap"
+                  onClick={() => setLightbox({ src: img, alt: item.imageCaption || item.title })}
+                  aria-label="ขยายรูป"
+                >
+                  <img
+                    src={img}
+                    alt={item.imageCaption || item.title}
+                    referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      const el = e.currentTarget;
+                      if (!el.dataset.retry) {
+                        el.dataset.retry = "1";
+                        const fid = img.split("/d/")[1];
+                        if (fid) el.src = `https://drive.google.com/thumbnail?id=${fid}&sz=w800`;
+                      } else {
+                        el.style.display = "none";
+                      }
+                    }}
+                  />
+                </button>
               )}
               {img && item.imageCaption && (
                 <div className="activity-card-caption">{item.imageCaption}</div>
@@ -111,6 +130,29 @@ export default function ActivitiesPage() {
           );
         })}
       </div>
+
+      {lightbox && (
+        <div
+          className="activity-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="รูปขยาย"
+          onClick={() => setLightbox(null)}
+        >
+          <button
+            type="button"
+            className="activity-lightbox-close"
+            onClick={(e) => { e.stopPropagation(); setLightbox(null); }}
+            aria-label="ปิด"
+          >
+            ✕
+          </button>
+          <div className="activity-lightbox-content" onClick={(e) => e.stopPropagation()}>
+            <img src={lightbox.src} alt={lightbox.alt} referrerPolicy="no-referrer" />
+            {lightbox.alt && <p className="activity-lightbox-caption">{lightbox.alt}</p>}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
