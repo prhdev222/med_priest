@@ -52,16 +52,18 @@ npm run db:init:remote
 npm run db:seed:remote
 ```
 
-### 6. ตั้งค่ารหัสผ่าน (secrets)
+### 6. ตั้งค่ารหัสผ่าน (secrets) — **ไม่มีการ hardcode ในโค้ด**
+รหัสเก็บใน **Cloudflare Secrets** เท่านั้น (เข้ารหัส ไม่เห็นใน repo หรือ build)
 ```bash
-# ตั้ง UNIT_CODE
+# ตั้ง UNIT_CODE (รหัสหน่วยงาน — ใช้ที่หน้า กรอกข้อมูล)
 wrangler secret put UNIT_CODE
-# พิมพ์ค่า เช่น MED222 แล้วกด Enter
+# พิมพ์รหัสที่ตั้งเอง (แนะนำ: ยาว 8+ ตัว ผสมอักษร+ตัวเลข) แล้วกด Enter
 
-# ตั้ง ADMIN_CODE
+# ตั้ง ADMIN_CODE (รหัสแอดมิน — ใช้ที่หน้า จัดการข้อมูล)
 wrangler secret put ADMIN_CODE
-# พิมพ์ค่า เช่น ADMIN222 แล้วกด Enter
+# พิมพ์รหัสที่ตั้งเอง (แนะนำ: ยาว 8+ ตัว แยกจาก UNIT_CODE) แล้วกด Enter
 ```
+**อย่าใช้รหัสตัวอย่างจากเอกสาร** — ให้ตั้งรหัสใหม่ที่คนอื่นเดาไม่ได้
 
 ### 7. ติดตั้ง dependencies + Deploy
 ```bash
@@ -94,6 +96,15 @@ npm run dev
 
 ---
 
+## ความปลอดภัยของรหัส (UNIT_CODE / ADMIN_CODE)
+- **รหัสไม่ถูก hardcode ในโค้ด** — Backend (Cloudflare Worker) อ่านจาก **Secrets** เท่านั้น
+- **อย่าคอมมิตรหัสลง Git** — ใช้เฉพาะ `wrangler secret put` หรือ Cloudflare Dashboard
+- **แนะนำ:** ใช้รหัสยาว 8–16 ตัวขึ้นไป ผสมตัวอักษรและตัวเลข (หรือใช้เครื่องมือสร้างรหัสสุ่ม)
+- **แยกรหัสหน่วยงานกับรหัสแอดมิน** — อย่าใช้รหัสเดียวกัน
+- **ถ้ารหัสรั่วไหล:** เปลี่ยนทันทีด้วย `wrangler secret put UNIT_CODE` หรือ `ADMIN_CODE`
+
+---
+
 ## คำสั่งที่ใช้บ่อย
 
 | คำสั่ง | ทำอะไร |
@@ -102,6 +113,7 @@ npm run dev
 | `npm run deploy` | Deploy Worker ขึ้น Cloudflare |
 | `npm run db:init:remote` | สร้างตารางบน D1 จริง |
 | `npm run db:seed:remote` | ใส่ข้อมูลตัวอย่างบน D1 จริง |
+| **`npm run db:clear:remote`** | **ล้างข้อมูลทั้งหมดบน D1 จริง (ใช้เมื่อจะใช้จริง — เริ่มต้นใหม่)** |
 | `wrangler d1 execute medpriest-db --remote --command "SELECT * FROM opd"` | Query ข้อมูลบน D1 จริง |
 | `wrangler secret put UNIT_CODE` | เปลี่ยน Unit Code |
 | `wrangler secret put ADMIN_CODE` | เปลี่ยน Admin Code |
@@ -143,6 +155,17 @@ wrangler d1 execute medpriest-db --remote --command "CREATE TABLE IF NOT EXISTS 
 ```bash
 wrangler d1 execute medpriest-db --remote --command "ALTER TABLE ipd_stays ADD COLUMN stay_type TEXT DEFAULT 'admit';"
 ```
+
+---
+
+## ล้างข้อมูลทั้งหมด (เมื่อจะใช้จริง)
+ถ้าเคยใส่ข้อมูลตัวอย่างหรือข้อมูลทดสอบ และต้องการ**เริ่มต้นใหม่** ให้รันในโฟลเดอร์ `cloudflare-worker`:
+```bash
+npm run db:clear:remote
+```
+จะลบแถวทั้งหมดในตาราง `opd`, `er`, `consult`, `ipd_stays`, `activities`, `encouragement`, `procedures` (ไม่ลบโครงสร้างตาราง)
+
+หรือรัน SQL เองใน Cloudflare Dashboard → D1 → เลือก database → Console โดยใช้ไฟล์ `cloudflare-worker/clear-all-data.sql`
 
 ---
 

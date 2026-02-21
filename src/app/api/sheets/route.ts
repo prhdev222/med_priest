@@ -68,6 +68,13 @@ export async function GET(req: NextRequest) {
     });
     clearTimeout(timer);
     const text = await response.text();
+    const isHtml = text.trim().startsWith("<!") || text.includes("<!DOCTYPE");
+    if (isHtml && !response.ok) {
+      return NextResponse.json(
+        { error: "Backend ตอบกลับเป็นหน้า 404 — กรุณาตรวจสอบ SCRIPT_URL ใน .env.local ชี้ไปที่ Cloudflare Worker ที่ deploy แล้ว" },
+        { status: 502 },
+      );
+    }
     if (!skipCache) putCache(cacheKey, text, response.status);
     return new NextResponse(text, {
       status: response.status,

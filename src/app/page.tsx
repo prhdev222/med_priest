@@ -173,6 +173,48 @@ const mockWardStats = [
   { ward: "ICU", admit: 2, discharge: 2 },
 ];
 
+/** Mock IPD แยก Ward รวม A/O (key ต้องตรงกับ mockRows) */
+const mockIpdByWardRows: IpdByWardRow[] = [
+  { key: "2026-02-10", ward: "MED1", admit: 2, discharge: 1, ao: 1 },
+  { key: "2026-02-10", ward: "MED2", admit: 1, discharge: 1, ao: 2 },
+  { key: "2026-02-10", ward: "IMC", admit: 1, discharge: 1, ao: 0 },
+  { key: "2026-02-11", ward: "MED1", admit: 2, discharge: 2, ao: 2 },
+  { key: "2026-02-11", ward: "MED2", admit: 2, discharge: 1, ao: 1 },
+  { key: "2026-02-11", ward: "IMC", admit: 1, discharge: 1, ao: 1 },
+  { key: "2026-02-12", ward: "MED1", admit: 1, discharge: 1, ao: 1 },
+  { key: "2026-02-12", ward: "MED2", admit: 2, discharge: 1, ao: 0 },
+  { key: "2026-02-13", ward: "MED1", admit: 2, discharge: 2, ao: 2 },
+  { key: "2026-02-13", ward: "MED2", admit: 2, discharge: 2, ao: 1 },
+  { key: "2026-02-14", ward: "MED1", admit: 1, discharge: 2, ao: 1 },
+  { key: "2026-02-14", ward: "Palliative", admit: 1, discharge: 1, ao: 1 },
+  { key: "2026-02-17", ward: "MED1", admit: 1, discharge: 0, ao: 1 },
+  { key: "2026-02-17", ward: "MED2", admit: 1, discharge: 1, ao: 0 },
+  { key: "2026-02-18", ward: "MED1", admit: 2, discharge: 2, ao: 2 },
+  { key: "2026-02-18", ward: "IMC", admit: 1, discharge: 1, ao: 1 },
+];
+
+/** Mock หัตถการเฉพาะ ต่อวัน + แยกตามประเภท */
+const mockProcedureStats: ProcedureStatsResponse = {
+  rows: [
+    { key: "2026-02-10", total: 6 },
+    { key: "2026-02-11", total: 8 },
+    { key: "2026-02-12", total: 4 },
+    { key: "2026-02-13", total: 10 },
+    { key: "2026-02-14", total: 5 },
+    { key: "2026-02-17", total: 7 },
+    { key: "2026-02-18", total: 9 },
+  ],
+  byProcedure: [
+    { procedureKey: "egd", procedureLabel: "EGD", count: 18 },
+    { procedureKey: "colonoscopy", procedureLabel: "Colonoscopy", count: 12 },
+    { procedureKey: "bone_marrow", procedureLabel: "Bone marrow aspiration & biopsy", count: 8 },
+    { procedureKey: "pleural_tapping", procedureLabel: "Pleural tapping", count: 6 },
+    { procedureKey: "lumbar_puncture", procedureLabel: "Lumbar puncture", count: 5 },
+    { procedureKey: "echocardiogram", procedureLabel: "Echocardiogram", count: 4 },
+    { procedureKey: "other", procedureLabel: "Bedside US", count: 4 },
+  ],
+};
+
 const DAY_LEGEND = [
   { name: "จันทร์", color: DAY_COLORS[1] },
   { name: "อังคาร", color: DAY_COLORS[2] },
@@ -303,13 +345,14 @@ export default function DashboardPage() {
   const viewLos = useMock ? 4.2 : Number(data.avgLosDays || 0);
 
   const aoByKey = useMemo(() => {
+    const rows = useMock ? mockIpdByWardRows : ipdByWardData.rows;
     const m: Record<string, number> = {};
-    for (const r of ipdByWardData.rows) {
+    for (const r of rows) {
       const k = String(r.key);
       m[k] = (m[k] ?? 0) + Number((r as { ao?: number }).ao ?? 0);
     }
     return m;
-  }, [ipdByWardData.rows]);
+  }, [useMock, ipdByWardData.rows]);
 
   const chartRows = useMemo(() => viewRows.map((r) => ({
     ...r,
@@ -331,23 +374,13 @@ export default function DashboardPage() {
   }, [viewWardStats, ipdByWardData.rows]);
 
   const effectiveIpdByWardRows = useMemo(() => {
-    if (useMock) {
-      const n = viewWardStats.length;
-      if (n === 0) return [];
-      return chartRows.flatMap((r) => {
-        const admitTotal = r.ipdAdmit ?? 0;
-        const dcTotal = r.ipdDischarge ?? 0;
-        const admitPer = Math.floor(admitTotal / n);
-        const dcPer = Math.floor(dcTotal / n);
-        return viewWardStats.map((w, i) => ({
-          key: String(r.key),
-          ward: String((w as { ward?: string }).ward ?? ""),
-          admit: i < n - 1 ? admitPer : admitTotal - admitPer * (n - 1),
-          discharge: i < n - 1 ? dcPer : dcTotal - dcPer * (n - 1),
-          ao: 0,
-        }));
-      });
-    }
+    if (useMock) return mockIpdByWardRows.map((x) => ({
+      key: String(x.key),
+      ward: String(x.ward),
+      admit: Number(x.admit ?? 0),
+      discharge: Number(x.discharge ?? 0),
+      ao: Number(x.ao ?? 0),
+    }));
     return ipdByWardData.rows.map((x) => ({
       key: String(x.key),
       ward: String(x.ward),
@@ -414,15 +447,17 @@ export default function DashboardPage() {
       }));
   }, [viewWardStats]);
 
+  const viewProcedureStats = useMock ? mockProcedureStats : procedureStats;
+
   const procedureChartRows = useMemo(() => {
-    return procedureStats.rows.map((r) => ({
+    return viewProcedureStats.rows.map((r) => ({
       ...r,
       label: shortLabel(r.key, group),
     }));
-  }, [procedureStats.rows, group]);
+  }, [viewProcedureStats.rows, group]);
 
   const procedurePieData = useMemo(() => {
-    const list = procedureStats.byProcedure;
+    const list = viewProcedureStats.byProcedure;
     const total = list.reduce((s, p) => s + Number(p.count || 0), 0);
     if (total === 0) return [];
     return list.map((p) => {
@@ -435,7 +470,7 @@ export default function DashboardPage() {
         pct: Math.round((Number(p.count || 0) / total) * 100),
       };
     });
-  }, [procedureStats.byProcedure]);
+  }, [viewProcedureStats.byProcedure]);
 
   const totals = useMemo(() => {
     return viewRows.reduce(
@@ -464,13 +499,13 @@ export default function DashboardPage() {
     const bom = "\uFEFF";
     const noteRow =
       hasNoData
-        ? "หมายเหตุ: ไม่มีข้อมูลในช่วงนี้ กรุณาตรวจสอบการเชื่อมต่อ Backend (.env.local SCRIPT_URL) หรือใส่ข้อมูลจากหน้า Data Entry ก่อน\n"
+        ? "หมายเหตุ: ไม่มีข้อมูลในช่วงวันที่เลือก ให้กรอกข้อมูลจากหน้า Data Entry\n"
         : "";
     const header = "วันที่,OPD,ER ผู้ป่วยนอก,Consult,IPD Admit,IPD D/C,IPD A/O\n";
     const rows = chartRows.map((r) => `${r.key},${r.opd ?? 0},${r.er ?? 0},${r.consult ?? 0},${r.ipdAdmit ?? 0},${r.ipdDischarge ?? 0},${r.ipdAo ?? 0}`).join("\n");
 
     const wardAgg: Record<string, { admit: number; discharge: number; ao: number }> = {};
-    for (const r of ipdByWardData.rows) {
+    for (const r of effectiveIpdByWardRows) {
       const ward = String(r.ward ?? "");
       if (!ward) continue;
       if (!wardAgg[ward]) wardAgg[ward] = { admit: 0, discharge: 0, ao: 0 };
@@ -485,12 +520,12 @@ export default function DashboardPage() {
       .join("\n");
 
     const totalAo = chartRows.reduce((s, r) => s + (r.ipdAo ?? 0), 0);
-    const totalProcedure = procedureStats.rows.reduce((s, r) => s + (r.total ?? 0), 0);
+    const totalProcedure = viewProcedureStats.rows.reduce((s, r) => s + (r.total ?? 0), 0);
     const summary = `\n\nสรุป ${from} ถึง ${to}\nOPD รวม,${totals.opd}\nER ผู้ป่วยนอก รวม,${totals.er}\nConsult รวม,${totals.consult}\nIPD Admit รวม,${totals.ipdAdmit}\nIPD D/C รวม,${totals.ipdDischarge}\nIPD A/O รวม,${totalAo}\nAvg LOS,${viewLos.toFixed(1)} วัน\nหัตถการเฉพาะ รวม,${totalProcedure} ครั้ง`;
 
     let procedureSection = "";
-    if (procedureStats.rows.length > 0) {
-      procedureSection = "\n\nหัตถการเฉพาะ ต่อช่วง\nช่วง,จำนวนครั้ง\n" + procedureStats.rows.map((r) => `${r.key},${r.total ?? 0}`).join("\n");
+    if (viewProcedureStats.rows.length > 0) {
+      procedureSection = "\n\nหัตถการเฉพาะ ต่อช่วง\nช่วง,จำนวนครั้ง\n" + viewProcedureStats.rows.map((r) => `${r.key},${r.total ?? 0}`).join("\n");
     }
     if (procedurePieData.length > 0) {
       procedureSection += "\n\nหัตถการเฉพาะ แยกตามประเภท\nประเภท,จำนวนครั้ง,สัดส่วน(%)\n" + procedurePieData.map((p) => `"${String(p.name).replace(/"/g, '""')}",${p.value},${p.pct}`).join("\n");
@@ -579,8 +614,8 @@ export default function DashboardPage() {
 
       {hasNoData && (
         <div className="entry-msg" style={{ maxWidth: "none", background: "#fef3c7", color: "#92400e" }}>
-          ไม่มีข้อมูลในช่วงวันที่เลือก — กรุณาตรวจสอบว่า <strong>.env.local</strong> ตั้งค่า <strong>SCRIPT_URL</strong> ชี้ไปที่ Backend (Cloudflare Worker) ที่ถูกต้อง และมีข้อมูลใน D1 หรือ{" "}
-          <a href="/data-entry" style={{ fontWeight: "bold", textDecoration: "underline" }}>กรอกข้อมูลจากหน้า Data Entry</a> ก่อน
+          ไม่มีข้อมูลในช่วงวันที่เลือก ให้{" "}
+          <a href="/data-entry" style={{ fontWeight: "bold", textDecoration: "underline" }}>กรอกข้อมูลจากหน้า Data Entry</a>
         </div>
       )}
 

@@ -113,13 +113,21 @@ async function fetchApi<T>(url: string, options?: RequestInit): Promise<T> {
   }
 
   const raw = await res.text();
+  const isHtml = typeof raw === "string" && (raw.trim().startsWith("<!") || raw.includes("This page could not be found") || raw.includes("<!DOCTYPE"));
+  if (isHtml && !res.ok) {
+    throw new Error("ไม่พบ API (404) — กรุณาตรวจสอบว่าแอป deploy ครบหรือรันจากโฟลเดอร์โปรเจกต์ที่ถูกต้อง");
+  }
+  if (isHtml) {
+    throw new Error("เซิร์ฟเวอร์ตอบกลับเป็นหน้าเว็บ แทนข้อมูล — กรุณาลองใหม่หรือตรวจสอบ SCRIPT_URL");
+  }
+
   let data: T | ApiError | null = null;
 
   try {
     data = raw ? (JSON.parse(raw) as T | ApiError) : null;
   } catch {
     if (!res.ok) {
-      throw new Error(raw || `HTTP ${res.status}`);
+      throw new Error(raw && raw.length < 200 ? raw : `HTTP ${res.status}`);
     }
     return {} as T;
   }
