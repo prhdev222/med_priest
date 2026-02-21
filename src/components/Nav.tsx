@@ -13,6 +13,7 @@ const displayLinks = [
 const staffLinks = [
   { href: "/data-entry", label: "กรอกข้อมูล", icon: "📝" },
   { href: "/admin", label: "จัดการข้อมูล", icon: "⚙️" },
+  { href: "https://script.google.com/macros/s/AKfycbycsuxgiennNjoEweElBe0RLCR5wMOj-vvC74qApVy62IznXCUdo7F5iMGrBavFVOhW/exec?page=form", label: "คิวรับ case กลางแพทย์", icon: "📋", external: true },
 ];
 
 export default function Nav() {
@@ -80,17 +81,31 @@ export default function Nav() {
             </button>
             {staffOpen && (
               <div className="nav-dropdown-menu">
-                {staffLinks.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={`nav-dropdown-item${pathname === item.href ? " active" : ""}`}
-                    onClick={() => setStaffOpen(false)}
-                  >
-                    <span className="nav-icon">{item.icon}</span>
-                    {item.label}
-                  </Link>
-                ))}
+                {staffLinks.map((item) =>
+                  (item as { external?: boolean }).external ? (
+                    <a
+                      key={item.href}
+                      href={item.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="nav-dropdown-item"
+                      onClick={() => setStaffOpen(false)}
+                    >
+                      <span className="nav-icon">{item.icon}</span>
+                      {item.label}
+                    </a>
+                  ) : (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      className={`nav-dropdown-item${pathname === item.href ? " active" : ""}`}
+                      onClick={() => setStaffOpen(false)}
+                    >
+                      <span className="nav-icon">{item.icon}</span>
+                      {item.label}
+                    </Link>
+                  ),
+                )}
               </div>
             )}
           </div>
@@ -110,17 +125,31 @@ export default function Nav() {
           </Link>
         ))}
         <div className="top-nav-mobile-divider" />
-        {staffLinks.map((item) => (
-          <Link
-            key={item.href}
-            href={item.href}
-            className={`top-nav-mobile-link${pathname === item.href ? " active" : ""}`}
-            onClick={() => setMobileOpen(false)}
-          >
-            <span className="nav-icon">{item.icon}</span>
-            {item.label}
-          </Link>
-        ))}
+        {staffLinks.map((item) =>
+          (item as { external?: boolean }).external ? (
+            <a
+              key={item.href}
+              href={item.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="top-nav-mobile-link"
+              onClick={() => setMobileOpen(false)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              {item.label}
+            </a>
+          ) : (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`top-nav-mobile-link${pathname === item.href ? " active" : ""}`}
+              onClick={() => setMobileOpen(false)}
+            >
+              <span className="nav-icon">{item.icon}</span>
+              {item.label}
+            </Link>
+          ),
+        )}
       </div>
     </nav>
   );
