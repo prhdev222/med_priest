@@ -269,6 +269,7 @@ export default function DashboardPage() {
   const [ipdByWardData, setIpdByWardData] = useState<{ rows: IpdByWardRow[] }>({ rows: [] });
   const [procedureStats, setProcedureStats] = useState<ProcedureStatsResponse>({ rows: [], byProcedure: [] });
   const [procedurePieOpen, setProcedurePieOpen] = useState(false);
+  const [pieFullscreen, setPieFullscreen] = useState<"ward" | "procedure" | null>(null);
   const emptyData: StatsResponse = { rows: [], wardStats: [], avgLosDays: 0 };
   const [data, setData] = useState<StatsResponse>(emptyData);
 
@@ -342,6 +343,13 @@ export default function DashboardPage() {
     const cleanup = fetchData();
     return cleanup;
   }, [fetchData]);
+
+  useEffect(() => {
+    if (!pieFullscreen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setPieFullscreen(null); };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [pieFullscreen]);
 
   const safeRows = Array.isArray(data?.rows) ? data.rows : [];
   const safeWardStats = Array.isArray(data?.wardStats) ? data.wardStats : [];
@@ -793,13 +801,20 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ─── Pie Chart: สัดส่วน Ward ─── */}
+      {/* ─── Pie Chart: สัดส่วน Ward (คลิกขยายเต็มจอ) ─── */}
       <div className="chart-card">
         <h3 className="chart-title">🏥 สัดส่วนผู้ป่วย IPD แยกตาม Ward <span className="chart-range">{rangeText}</span></h3>
         {wardPieData.length === 0 ? (
           <p style={{ textAlign: "center", color: "var(--muted)", padding: 20 }}>ไม่มีข้อมูล IPD ในช่วงนี้</p>
         ) : (
-          <>
+          <div
+            role="button"
+            tabIndex={0}
+            className="pie-click-expand"
+            onClick={() => setPieFullscreen("ward")}
+            onKeyDown={(e) => e.key === "Enter" && setPieFullscreen("ward")}
+            title="คลิกเพื่อขยายเต็มจอ"
+          >
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -829,7 +844,8 @@ export default function DashboardPage() {
                 </div>
               ))}
             </div>
-          </>
+            <p className="pie-expand-hint">🖱️ คลิกเพื่อขยายเต็มจอ</p>
+          </div>
         )}
       </div>
 
@@ -881,7 +897,14 @@ export default function DashboardPage() {
             {procedurePieData.length === 0 ? (
               <p style={{ textAlign: "center", color: "var(--muted)", padding: 20 }}>ไม่มีข้อมูลหัตถการในช่วงนี้</p>
             ) : (
-              <>
+              <div
+                role="button"
+                tabIndex={0}
+                className="pie-click-expand"
+                onClick={() => setPieFullscreen("procedure")}
+                onKeyDown={(e) => e.key === "Enter" && setPieFullscreen("procedure")}
+                title="คลิกเพื่อขยายเต็มจอ"
+              >
                 <ResponsiveContainer width="100%" height={300}>
                   <PieChart>
                     <Pie
@@ -911,11 +934,82 @@ export default function DashboardPage() {
                     </div>
                   ))}
                 </div>
-              </>
+                <p className="pie-expand-hint">🖱️ คลิกเพื่อขยายเต็มจอ</p>
+              </div>
             )}
           </>
         )}
       </div>
+
+      {/* ─── Fullscreen Pie Overlay ─── */}
+      {pieFullscreen && (
+        <div
+          className="pie-fullscreen-overlay"
+          onClick={(e) => e.target === e.currentTarget && setPieFullscreen(null)}
+          role="dialog"
+          aria-label="กราฟวงกลมขยายเต็มจอ"
+        >
+          <div className="pie-fullscreen-content">
+            <button
+              type="button"
+              className="pie-fullscreen-close"
+              onClick={() => setPieFullscreen(null)}
+              aria-label="ปิด"
+            >
+              ✕
+            </button>
+            <h3 className="pie-fullscreen-title">
+              {pieFullscreen === "ward" ? "🏥 สัดส่วนผู้ป่วย IPD แยกตาม Ward" : "🩺 สัดส่วนหัตถการเฉพาะ แยกตามประเภท"}
+            </h3>
+            <div className="pie-fullscreen-chart">
+              {pieFullscreen === "ward" && wardPieData.length > 0 && (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={wardPieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={80}
+                      outerRadius={160}
+                      paddingAngle={3}
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ name, pct }) => `${name} ${pct}%`}
+                    >
+                      {wardPieData.map((_, i) => (
+                        <Cell key={i} fill={WARD_COLORS[i % WARD_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number, name: string) => [`${value} ราย`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+              {pieFullscreen === "procedure" && procedurePieData.length > 0 && (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={procedurePieData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={80}
+                      outerRadius={160}
+                      paddingAngle={3}
+                      dataKey="value"
+                      nameKey="name"
+                      label={({ name, pct }) => `${name} ${pct}%`}
+                    >
+                      {procedurePieData.map((_, i) => (
+                        <Cell key={i} fill={WARD_COLORS[i % WARD_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip formatter={(value: number, name: string) => [`${value} ครั้ง`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

@@ -533,6 +533,80 @@ button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 .ward-legend-name { font-weight: 600; color: var(--text); }
 .ward-legend-val { color: var(--muted); font-size: 0.82rem; }
 
+/* ─── Pie คลิกขยายเต็มจอ ─── */
+.pie-click-expand {
+  cursor: pointer;
+  border-radius: 10px;
+  padding: 8px;
+  margin: -8px;
+  transition: background 0.15s ease;
+}
+.pie-click-expand:hover { background: rgba(37, 99, 235, 0.04); }
+.pie-expand-hint {
+  margin: 6px 0 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-align: center;
+}
+
+.pie-fullscreen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(15, 23, 42, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: pieOverlayIn 0.2s ease;
+}
+@keyframes pieOverlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.pie-fullscreen-content {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 24px 24px 20px;
+  max-width: min(560px, 95vw);
+  width: 100%;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3);
+  position: relative;
+}
+.pie-fullscreen-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 10px;
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 1.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease;
+}
+.pie-fullscreen-close:hover { background: var(--border); }
+.pie-fullscreen-title {
+  margin: 0 0 16px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: center;
+}
+.pie-fullscreen-chart {
+  width: 100%;
+  height: 380px;
+  flex-shrink: 0;
+}
+
 /* ─── Day Color Legend ─── */
 .day-legend {
   display: flex;
