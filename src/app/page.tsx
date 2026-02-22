@@ -152,66 +152,72 @@ function shortLabel(key: string, group: string): string {
   return key.slice(-5);
 }
 
-const mockRows = [
-  { key: "2026-02-10", opd: 22, er: 5, consult: 3, ipdAdmit: 5, ipdDischarge: 4 },
-  { key: "2026-02-11", opd: 27, er: 6, consult: 4, ipdAdmit: 6, ipdDischarge: 5 },
-  { key: "2026-02-12", opd: 24, er: 4, consult: 2, ipdAdmit: 4, ipdDischarge: 3 },
-  { key: "2026-02-13", opd: 30, er: 7, consult: 5, ipdAdmit: 7, ipdDischarge: 6 },
-  { key: "2026-02-14", opd: 26, er: 3, consult: 4, ipdAdmit: 5, ipdDischarge: 6 },
-  { key: "2026-02-17", opd: 20, er: 5, consult: 3, ipdAdmit: 3, ipdDischarge: 2 },
-  { key: "2026-02-18", opd: 25, er: 4, consult: 2, ipdAdmit: 4, ipdDischarge: 5 },
-];
+/** สร้าง Mock ครบทุกวัน (จ–อา) 3 สัปดาห์ เริ่มจันทร์ 2026-01-06 */
+function buildMockRows(): { key: string; opd: number; er: number; consult: number; ipdAdmit: number; ipdDischarge: number }[] {
+  const rows: { key: string; opd: number; er: number; consult: number; ipdAdmit: number; ipdDischarge: number }[] = [];
+  const start = new Date("2026-01-06"); // จันทร์
+  for (let i = 0; i < 21; i++) {
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    const day = d.getDay();
+    const base = day === 0 || day === 6 ? 12 : 22; // เสาร์-อาทิตย์น้อยลง
+    rows.push({
+      key,
+      opd: base + (i % 8),
+      er: 3 + (i % 4),
+      consult: 2 + (i % 3),
+      ipdAdmit: 4 + (i % 4),
+      ipdDischarge: 3 + (i % 4),
+    });
+  }
+  return rows;
+}
+
+const mockRows = buildMockRows();
 
 const WARD_COLORS = ["#2563eb", "#f59e0b", "#14b8a6", "#e11d48", "#8b5cf6", "#f97316"];
 
 const mockWardStats = [
-  { ward: "MED1", admit: 8, discharge: 6 },
-  { ward: "MED2", admit: 7, discharge: 5 },
-  { ward: "IMC", admit: 4, discharge: 4 },
-  { ward: "Palliative", admit: 3, discharge: 2 },
-  { ward: "ward90", admit: 5, discharge: 4 },
-  { ward: "ICU", admit: 2, discharge: 2 },
+  { ward: "MED1", admit: 18, discharge: 15 },
+  { ward: "MED2", admit: 16, discharge: 14 },
+  { ward: "IMC", admit: 10, discharge: 9 },
+  { ward: "Palliative", admit: 6, discharge: 5 },
+  { ward: "ward90", admit: 8, discharge: 7 },
+  { ward: "ICU", admit: 4, discharge: 4 },
 ];
 
-/** Mock IPD แยก Ward รวม A/O (key ต้องตรงกับ mockRows) */
-const mockIpdByWardRows: IpdByWardRow[] = [
-  { key: "2026-02-10", ward: "MED1", admit: 2, discharge: 1, ao: 1 },
-  { key: "2026-02-10", ward: "MED2", admit: 1, discharge: 1, ao: 2 },
-  { key: "2026-02-10", ward: "IMC", admit: 1, discharge: 1, ao: 0 },
-  { key: "2026-02-11", ward: "MED1", admit: 2, discharge: 2, ao: 2 },
-  { key: "2026-02-11", ward: "MED2", admit: 2, discharge: 1, ao: 1 },
-  { key: "2026-02-11", ward: "IMC", admit: 1, discharge: 1, ao: 1 },
-  { key: "2026-02-12", ward: "MED1", admit: 1, discharge: 1, ao: 1 },
-  { key: "2026-02-12", ward: "MED2", admit: 2, discharge: 1, ao: 0 },
-  { key: "2026-02-13", ward: "MED1", admit: 2, discharge: 2, ao: 2 },
-  { key: "2026-02-13", ward: "MED2", admit: 2, discharge: 2, ao: 1 },
-  { key: "2026-02-14", ward: "MED1", admit: 1, discharge: 2, ao: 1 },
-  { key: "2026-02-14", ward: "Palliative", admit: 1, discharge: 1, ao: 1 },
-  { key: "2026-02-17", ward: "MED1", admit: 1, discharge: 0, ao: 1 },
-  { key: "2026-02-17", ward: "MED2", admit: 1, discharge: 1, ao: 0 },
-  { key: "2026-02-18", ward: "MED1", admit: 2, discharge: 2, ao: 2 },
-  { key: "2026-02-18", ward: "IMC", admit: 1, discharge: 1, ao: 1 },
-];
+/** Mock IPD แยก Ward (key ตรงกับ mockRows ทุกวัน) */
+function buildMockIpdByWardRows(): IpdByWardRow[] {
+  const wards = ["MED1", "MED2", "IMC"] as const;
+  const out: IpdByWardRow[] = [];
+  mockRows.forEach((row, i) => {
+    wards.forEach((ward, w) => {
+      out.push({
+        key: row.key,
+        ward,
+        admit: 1 + ((i + w) % 3),
+        discharge: 1 + ((i + w + 1) % 3),
+        ao: (i + w) % 2,
+      });
+    });
+  });
+  return out;
+}
 
-/** Mock หัตถการเฉพาะ ต่อวัน + แยกตามประเภท */
+const mockIpdByWardRows: IpdByWardRow[] = buildMockIpdByWardRows();
+
+/** Mock หัตถการเฉพาะ ครบทุกวัน */
 const mockProcedureStats: ProcedureStatsResponse = {
-  rows: [
-    { key: "2026-02-10", total: 6 },
-    { key: "2026-02-11", total: 8 },
-    { key: "2026-02-12", total: 4 },
-    { key: "2026-02-13", total: 10 },
-    { key: "2026-02-14", total: 5 },
-    { key: "2026-02-17", total: 7 },
-    { key: "2026-02-18", total: 9 },
-  ],
+  rows: mockRows.map((r) => ({ key: r.key, total: 4 + (r.opd % 6) })),
   byProcedure: [
-    { procedureKey: "egd", procedureLabel: "EGD", count: 18 },
-    { procedureKey: "colonoscopy", procedureLabel: "Colonoscopy", count: 12 },
-    { procedureKey: "bone_marrow", procedureLabel: "Bone marrow aspiration & biopsy", count: 8 },
-    { procedureKey: "pleural_tapping", procedureLabel: "Pleural tapping", count: 6 },
-    { procedureKey: "lumbar_puncture", procedureLabel: "Lumbar puncture", count: 5 },
-    { procedureKey: "echocardiogram", procedureLabel: "Echocardiogram", count: 4 },
-    { procedureKey: "other", procedureLabel: "Bedside US", count: 4 },
+    { procedureKey: "egd", procedureLabel: "EGD", count: 28 },
+    { procedureKey: "colonoscopy", procedureLabel: "Colonoscopy", count: 18 },
+    { procedureKey: "bone_marrow", procedureLabel: "Bone marrow aspiration & biopsy", count: 12 },
+    { procedureKey: "pleural_tapping", procedureLabel: "Pleural tapping", count: 10 },
+    { procedureKey: "lumbar_puncture", procedureLabel: "Lumbar puncture", count: 8 },
+    { procedureKey: "echocardiogram", procedureLabel: "Echocardiogram", count: 6 },
+    { procedureKey: "other", procedureLabel: "Bedside US", count: 5 },
   ],
 };
 
@@ -486,6 +492,9 @@ export default function DashboardPage() {
   }, [viewRows]);
 
   const chartH = 260;
+  /** ความกว้างกราฟเมื่อข้อมูลมาก — ให้เลื่อนแนวนอนได้ */
+  const chartScrollWidth = Math.max(800, chartRows.length * 48);
+  const procedureScrollWidth = Math.max(800, procedureChartRows.length * 48);
   const rangeText = `${from} ถึง ${to}`;
 
   const hasNoData =
@@ -660,57 +669,69 @@ export default function DashboardPage() {
       {/* ─── Chart: OPD ─── */}
       <div className="chart-card">
         <h3 className="chart-title">🏥 OPD ผู้ป่วยนอก <span className="chart-range">{rangeText}</span></h3>
-        <ResponsiveContainer width="100%" height={chartH}>
-          <BarChart data={chartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-            <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} />
-            <Bar dataKey="opd" name="OPD" radius={[4, 4, 0, 0]}>
-              {chartRows.map((entry, i) => (
-                <Cell key={i} fill={entry.dayIdx >= 0 ? DAY_COLORS[entry.dayIdx] : "#2563eb"} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="chart-scroll-wrap" style={{ overflowX: "auto" }}>
+          <div style={{ minWidth: chartScrollWidth }}>
+            <ResponsiveContainer width="100%" height={chartH}>
+              <BarChart data={chartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} />
+                <Bar dataKey="opd" name="OPD" radius={[4, 4, 0, 0]}>
+                  {chartRows.map((entry, i) => (
+                    <Cell key={i} fill={entry.dayIdx >= 0 ? DAY_COLORS[entry.dayIdx] : "#2563eb"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
         {group === "day" && <DayColorLegend />}
       </div>
 
       {/* ─── Chart: ER ผู้ป่วยนอก ─── */}
       <div className="chart-card">
         <h3 className="chart-title">🚑 ER ผู้ป่วยนอก <span className="chart-range">{rangeText}</span></h3>
-        <ResponsiveContainer width="100%" height={chartH}>
-          <BarChart data={chartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-            <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} />
-            <Bar dataKey="er" name="ER" radius={[4, 4, 0, 0]}>
-              {chartRows.map((entry, i) => (
-                <Cell key={i} fill={entry.dayIdx >= 0 ? DAY_COLORS[entry.dayIdx] : "#f97316"} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="chart-scroll-wrap" style={{ overflowX: "auto" }}>
+          <div style={{ minWidth: chartScrollWidth }}>
+            <ResponsiveContainer width="100%" height={chartH}>
+              <BarChart data={chartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} />
+                <Bar dataKey="er" name="ER" radius={[4, 4, 0, 0]}>
+                  {chartRows.map((entry, i) => (
+                    <Cell key={i} fill={entry.dayIdx >= 0 ? DAY_COLORS[entry.dayIdx] : "#f97316"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
         {group === "day" && <DayColorLegend />}
       </div>
 
       {/* ─── Chart: Consult ─── */}
       <div className="chart-card">
         <h3 className="chart-title">📞 Consult นอกแผนก <span className="chart-range">{rangeText}</span></h3>
-        <ResponsiveContainer width="100%" height={chartH}>
-          <BarChart data={chartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-            <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} />
-            <Bar dataKey="consult" name="Consult" radius={[4, 4, 0, 0]}>
-              {chartRows.map((entry, i) => (
-                <Cell key={i} fill={entry.dayIdx >= 0 ? DAY_COLORS[entry.dayIdx] : "#14b8a6"} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="chart-scroll-wrap" style={{ overflowX: "auto" }}>
+          <div style={{ minWidth: chartScrollWidth }}>
+            <ResponsiveContainer width="100%" height={chartH}>
+              <BarChart data={chartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} />
+                <Bar dataKey="consult" name="Consult" radius={[4, 4, 0, 0]}>
+                  {chartRows.map((entry, i) => (
+                    <Cell key={i} fill={entry.dayIdx >= 0 ? DAY_COLORS[entry.dayIdx] : "#14b8a6"} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
         {group === "day" && <DayColorLegend />}
       </div>
 
@@ -743,29 +764,33 @@ export default function DashboardPage() {
             ไม่มีข้อมูล {ipdViewLabel} สำหรับ Ward ที่เลือกในช่วงนี้ ลองเปลี่ยน Ward หรือช่วงวันที่
           </p>
         )}
-        <ResponsiveContainer width="100%" height={chartH}>
-          <BarChart data={ipdChartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} />
-            <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 11 }} allowDecimals={false} domain={[0, "auto"]} />
-            <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} />
-            {(!ipdWard1 || ipdWard1 === "ทั้งหมด") ? (
-              <>
-                {(ipdShowAdmit || ipdShowDc || ipdShowAo) && <Legend wrapperStyle={{ fontSize: 12 }} />}
-                {ipdShowAdmit && <Bar dataKey="ipdAdmit" fill="#f59e0b" name="Admit" radius={[4, 4, 0, 0]} />}
-                {ipdShowDc && <Bar dataKey="ipdDischarge" fill="#22c55e" name="D/C" radius={[4, 4, 0, 0]} />}
-                {ipdShowAo && <Bar dataKey="ipdAo" fill="#8b5cf6" name="A/O (รวมทุก Ward)" radius={[4, 4, 0, 0]} />}
-              </>
-            ) : (
-              <>
-                <Legend wrapperStyle={{ fontSize: 12 }} />
-                {ipdShowAdmit && <Bar dataKey={`${ipdWard1} (Admit)`} fill="#f59e0b" name={`${ipdWard1} (Admit)`} radius={[4, 4, 0, 0]} minPointSize={2} />}
-                {ipdShowDc && <Bar dataKey={`${ipdWard1} (D/C)`} fill="#22c55e" name={`${ipdWard1} (D/C)`} radius={[4, 4, 0, 0]} minPointSize={2} />}
-                {ipdShowAo && <Bar dataKey={`${ipdWard1} (A/O)`} fill="#8b5cf6" name={`${ipdWard1} (A/O)`} radius={[4, 4, 0, 0]} minPointSize={2} />}
-              </>
-            )}
-          </BarChart>
-        </ResponsiveContainer>
+        <div className="chart-scroll-wrap" style={{ overflowX: "auto" }}>
+          <div style={{ minWidth: chartScrollWidth }}>
+            <ResponsiveContainer width="100%" height={chartH}>
+              <BarChart data={ipdChartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                <YAxis tick={{ fontSize: 11 }} allowDecimals={false} domain={[0, "auto"]} />
+                <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} />
+                {(!ipdWard1 || ipdWard1 === "ทั้งหมด") ? (
+                  <>
+                    {(ipdShowAdmit || ipdShowDc || ipdShowAo) && <Legend wrapperStyle={{ fontSize: 12 }} />}
+                    {ipdShowAdmit && <Bar dataKey="ipdAdmit" fill="#f59e0b" name="Admit" radius={[4, 4, 0, 0]} />}
+                    {ipdShowDc && <Bar dataKey="ipdDischarge" fill="#22c55e" name="D/C" radius={[4, 4, 0, 0]} />}
+                    {ipdShowAo && <Bar dataKey="ipdAo" fill="#8b5cf6" name="A/O (รวมทุก Ward)" radius={[4, 4, 0, 0]} />}
+                  </>
+                ) : (
+                  <>
+                    <Legend wrapperStyle={{ fontSize: 12 }} />
+                    {ipdShowAdmit && <Bar dataKey={`${ipdWard1} (Admit)`} fill="#f59e0b" name={`${ipdWard1} (Admit)`} radius={[4, 4, 0, 0]} minPointSize={2} />}
+                    {ipdShowDc && <Bar dataKey={`${ipdWard1} (D/C)`} fill="#22c55e" name={`${ipdWard1} (D/C)`} radius={[4, 4, 0, 0]} minPointSize={2} />}
+                    {ipdShowAo && <Bar dataKey={`${ipdWard1} (A/O)`} fill="#8b5cf6" name={`${ipdWard1} (A/O)`} radius={[4, 4, 0, 0]} minPointSize={2} />}
+                  </>
+                )}
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       </div>
 
       {/* ─── Pie Chart: สัดส่วน Ward ─── */}
@@ -814,15 +839,19 @@ export default function DashboardPage() {
         {procedureChartRows.length === 0 ? (
           <p style={{ textAlign: "center", color: "var(--muted)", padding: 20 }}>ไม่มีข้อมูลหัตถการในช่วงนี้</p>
         ) : (
-          <ResponsiveContainer width="100%" height={chartH}>
-            <BarChart data={procedureChartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} />
-              <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-              <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-              <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} formatter={(v: number) => [`${v} ครั้ง`, "หัตถการ"]} />
-              <Bar dataKey="total" name="หัตถการ (ครั้ง)" fill="#7c3aed" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
+          <div className="chart-scroll-wrap" style={{ overflowX: "auto" }}>
+            <div style={{ minWidth: procedureScrollWidth }}>
+              <ResponsiveContainer width="100%" height={chartH}>
+                <BarChart data={procedureChartRows} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                  <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? payload?.[0]?.payload?.key ?? ""} formatter={(v: number) => [`${v} ครั้ง`, "หัตถการ"]} />
+                  <Bar dataKey="total" name="หัตถการ (ครั้ง)" fill="#7c3aed" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
         )}
       </div>
 

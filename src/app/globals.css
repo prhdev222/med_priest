@@ -460,6 +460,12 @@ button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
   color: var(--muted);
 }
 
+.chart-scroll-wrap {
+  margin: 0 -4px;
+  padding-bottom: 4px;
+  -webkit-overflow-scrolling: touch;
+}
+
 .chart-header {
   display: flex;
   align-items: baseline;
