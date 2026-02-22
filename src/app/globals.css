@@ -576,6 +576,8 @@ button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
   align-items: center;
   box-shadow: 0 24px 48px rgba(0, 0, 0, 0.3);
   position: relative;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
 }
 .pie-fullscreen-close {
   position: absolute;
@@ -603,8 +605,15 @@ button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
 }
 .pie-fullscreen-chart {
   width: 100%;
+  min-width: 280px;
   height: 380px;
   flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .pie-fullscreen-overlay { padding: 12px; align-items: flex-start; }
+  .pie-fullscreen-content { max-height: 95vh; max-width: none; min-width: min(100%, 360px); }
+  .pie-fullscreen-chart { min-width: 320px; height: 340px; }
 }
 
 /* ─── Day Color Legend ─── */
