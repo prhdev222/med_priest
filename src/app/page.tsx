@@ -553,7 +553,7 @@ export default function DashboardPage() {
         <p className="print-range">ข้อมูล: {rangeText}</p>
       </div>
 
-      <div className="control-row" style={{ position: "relative", zIndex: 10000 }}>
+      <div className="control-row">
         <label>
           แสดงกราฟแบบ
           <select value={group} onChange={(e) => setGroup(e.target.value as GroupBy)}>

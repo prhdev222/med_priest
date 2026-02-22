@@ -40,10 +40,15 @@ a { color: var(--primary); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 /* ─── Layout ─── */
+/* ความสูงแถบ Nav (ต้องตรงกับ .top-nav-inner) */
+:root { --nav-height: 56px; }
+
 .app-shell {
   max-width: 1140px;
   margin: 0 auto;
   padding: 24px 18px;
+  padding-top: calc(var(--nav-height) + 20px); /* ไม่ให้เนื้อหาทับ Nav */
+  min-height: calc(100vh - var(--nav-height));
 }
 
 /* ─── Top Navigation ─── */
@@ -368,13 +373,24 @@ button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
   margin-bottom: 4px;
 }
 
-/* ─── Control Row ─── */
+/* ─── Control Row (แถบตัวกรอง — แนบใต้ Nav ตอนเลื่อน ไม่ทับ Nav) ─── */
 .control-row {
+  position: sticky;
+  top: var(--nav-height);
+  z-index: 50;
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 16px;
   align-items: flex-end;
+  background: var(--bg);
+  padding-top: 10px;
+  padding-bottom: 12px;
+  margin-left: -18px;
+  margin-right: -18px;
+  padding-left: 18px;
+  padding-right: 18px;
+  box-shadow: 0 2px 12px rgba(15, 23, 42, 0.06);
 }
 
 .control-row label {
@@ -1195,6 +1211,7 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
   .stat-grid { grid-template-columns: repeat(2, 1fr); }
   .chart-card { padding: 10px 6px; margin-top: 10px; }
   .chart-title { font-size: 0.92rem; }
+  .control-row { margin-left: -8px; margin-right: -8px; padding-left: 8px; padding-right: 8px; }
   .control-row label { font-size: 0.78rem; }
   .control-row input,
   .control-row select { min-width: 100px; padding: 7px 10px; font-size: 0.85rem; }
@@ -1203,6 +1220,6 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
   .admin-list-item { flex-direction: column; align-items: flex-start; }
   .admin-list-actions { align-self: flex-end; }
   section { padding: 14px 10px; border-radius: 12px; }
-  .app-shell { padding: 14px 8px; }
+  .app-shell { padding: 14px 8px; padding-top: calc(var(--nav-height) + 14px); }
   .page-header h1 { font-size: 1.2rem; }
 }
