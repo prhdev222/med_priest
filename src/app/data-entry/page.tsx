@@ -8,7 +8,7 @@ import {
   PROCEDURE_OPTIONS,
 } from "@/lib/api";
 
-const wards = ["MED1", "MED2", "IMC", "Palliative", "ward90", "ICU"];
+const wards = ["MED1", "MED2", "IMC", "Palliative", "ward90", "ICU", "__other__"];
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 export default function DataEntryPage() {
@@ -20,8 +20,10 @@ export default function DataEntryPage() {
   const [consult, setConsult] = useState(0);
   const [admitHn, setAdmitHn] = useState("");
   const [admitWard, setAdmitWard] = useState(wards[0]);
+  const [admitWardCustom, setAdmitWardCustom] = useState("");
   const [admitDate, setAdmitDate] = useState(todayIso());
   const [aoWard, setAoWard] = useState(wards[0]);
+  const [aoWardCustom, setAoWardCustom] = useState("");
   const [aoDate, setAoDate] = useState(todayIso());
   const [aoCount, setAoCount] = useState(1);
   const [dcHn, setDcHn] = useState("");
@@ -51,6 +53,7 @@ export default function DataEntryPage() {
   const [editConVal, setEditConVal] = useState(0);
   const [editIpdId, setEditIpdId] = useState<number | null>(null);
   const [editIpdForm, setEditIpdForm] = useState<{ hn: string; ward: string; stayType?: string }>({ hn: "", ward: wards[0] });
+  const [editIpdWardCustom, setEditIpdWardCustom] = useState("");
 
   function flash(text: string, type: "success" | "error" = "success") {
     setMsg(text);
@@ -104,11 +107,15 @@ export default function DataEntryPage() {
     } catch (error) { flash((error as Error).message, "error"); }
   }
 
+  const resolveWard = (selected: string, custom: string) =>
+    selected === "__other__" ? custom.trim() || "Other" : selected;
+
   async function submitAdmit(e: FormEvent) {
     e.preventDefault(); setMsg("");
+    const ward = resolveWard(admitWard, admitWardCustom);
     try {
-      await addIpdAdmit({ code, hn: admitHn, ward: admitWard, admitDate, stayType: "admit" });
-      setAdmitHn("");
+      await addIpdAdmit({ code, hn: admitHn, ward, admitDate, stayType: "admit" });
+      setAdmitHn(""); setAdmitWardCustom("");
       flash("บันทึก Admit สำเร็จ");
       await Promise.all([loadOpenCases(code), loadToday(code)]);
     } catch (error) { flash((error as Error).message, "error"); }
@@ -116,8 +123,10 @@ export default function DataEntryPage() {
 
   async function submitAo(e: FormEvent) {
     e.preventDefault(); setMsg("");
+    const ward = resolveWard(aoWard, aoWardCustom);
     try {
-      await addIpdAdmit({ code, stayType: "ao", ward: aoWard, admitDate: aoDate, count: aoCount });
+      await addIpdAdmit({ code, stayType: "ao", ward, admitDate: aoDate, count: aoCount });
+      setAoWardCustom("");
       flash(`บันทึก A/O ${aoCount} ราย สำเร็จ`);
       await loadToday(code);
     } catch (error) { flash((error as Error).message, "error"); }
@@ -193,9 +202,10 @@ export default function DataEntryPage() {
 
   async function saveEditIpd() {
     if (editIpdId === null) return;
+    const ward = resolveWard(editIpdForm.ward, editIpdWardCustom);
     try {
-      await updateTodayRow({ code, sheetType: "ipd", rowId: String(editIpdId), ...editIpdForm });
-      setEditIpdId(null); flash("แก้ไข IPD สำเร็จ"); await Promise.all([loadOpenCases(code), loadToday(code)]);
+      await updateTodayRow({ code, sheetType: "ipd", rowId: String(editIpdId), ...editIpdForm, ward });
+      setEditIpdId(null); setEditIpdWardCustom(""); flash("แก้ไข IPD สำเร็จ"); await Promise.all([loadOpenCases(code), loadToday(code)]);
     } catch (error) { flash((error as Error).message, "error"); }
   }
 
@@ -363,8 +373,9 @@ export default function DataEntryPage() {
           <form onSubmit={submitAdmit} className="entry-form">
             <div className="field-grid-2">
               <div className="field-group"><label>HN</label><input placeholder="เลข HN" value={admitHn} onChange={(e) => setAdmitHn(e.target.value)} required /></div>
-              <div className="field-group"><label>Ward</label><select value={admitWard} onChange={(e) => setAdmitWard(e.target.value)}>{wards.map((w) => <option key={w} value={w}>{w}</option>)}</select></div>
+              <div className="field-group"><label>Ward</label><select value={admitWard} onChange={(e) => setAdmitWard(e.target.value)}>{wards.map((w) => <option key={w} value={w}>{w === "__other__" ? "Other (พิมพ์เอง)" : w}</option>)}</select></div>
             </div>
+            {admitWard === "__other__" && <div className="field-group"><label>ชื่อ Ward</label><input placeholder="พิมพ์ชื่อ Ward" value={admitWardCustom} onChange={(e) => setAdmitWardCustom(e.target.value)} required /></div>}
             <div className="field-group"><label>วันที่ Admit</label><input type="date" value={admitDate} onChange={(e) => setAdmitDate(e.target.value)} required /></div>
             <button type="submit" style={{ justifySelf: "start" }}>บันทึก Admit</button>
           </form>
@@ -372,7 +383,8 @@ export default function DataEntryPage() {
         <div className="entry-card">
           <div className="entry-card-header"><span className="entry-card-icon">🛏️</span><h2>IPD A/O</h2></div>
           <form onSubmit={submitAo} className="entry-form">
-            <div className="field-group"><label>Ward</label><select value={aoWard} onChange={(e) => setAoWard(e.target.value)}>{wards.map((w) => <option key={w} value={w}>{w}</option>)}</select></div>
+            <div className="field-group"><label>Ward</label><select value={aoWard} onChange={(e) => setAoWard(e.target.value)}>{wards.map((w) => <option key={w} value={w}>{w === "__other__" ? "Other (พิมพ์เอง)" : w}</option>)}</select></div>
+            {aoWard === "__other__" && <div className="field-group"><label>ชื่อ Ward</label><input placeholder="พิมพ์ชื่อ Ward" value={aoWardCustom} onChange={(e) => setAoWardCustom(e.target.value)} required /></div>}
             <div className="field-grid-2">
               <div className="field-group"><label>วันที่เข้า</label><input type="date" value={aoDate} onChange={(e) => setAoDate(e.target.value)} required /></div>
               <div className="field-group"><label>จำนวน (ราย)</label><input type="number" min={1} max={100} value={aoCount} onChange={(e) => setAoCount(Number(e.target.value) || 1)} /></div>
@@ -411,9 +423,10 @@ export default function DataEntryPage() {
                       <>
                         {!isAo && <input placeholder="HN" value={editIpdForm.hn} onChange={(e) => setEditIpdForm({ ...editIpdForm, hn: e.target.value })} style={{ width: 100 }} />}
                         {isAo && <span style={{ color: "var(--muted)", marginRight: 8 }}>A/O</span>}
-                        <select value={editIpdForm.ward} onChange={(e) => setEditIpdForm({ ...editIpdForm, ward: e.target.value })} style={{ width: 100 }}>
-                          {wards.map((w) => <option key={w} value={w}>{w}</option>)}
+                        <select value={editIpdForm.ward} onChange={(e) => { setEditIpdForm({ ...editIpdForm, ward: e.target.value }); if (e.target.value !== "__other__") setEditIpdWardCustom(""); }} style={{ width: 120 }}>
+                          {wards.map((w) => <option key={w} value={w}>{w === "__other__" ? "Other (พิมพ์เอง)" : w}</option>)}
                         </select>
+                        {editIpdForm.ward === "__other__" && <input placeholder="ชื่อ Ward" value={editIpdWardCustom} onChange={(e) => setEditIpdWardCustom(e.target.value)} style={{ width: 100 }} />}
                         <button className="btn-sm" onClick={saveEditIpd}>💾</button>
                         <button className="btn-sm btn-secondary" onClick={() => setEditIpdId(null)}>ยกเลิก</button>
                       </>
