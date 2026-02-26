@@ -41,7 +41,7 @@ export default function DataEntryPage() {
   const [dcHn, setDcHn] = useState("");
   const [dcDate, setDcDate] = useState(todayIso());
   const [openCases, setOpenCases] = useState<IpdOpenCase[]>([]);
-  const [showHn, setShowHn] = useState(false);
+  const [dcFilterWard, setDcFilterWard] = useState("__all__");
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState<"success" | "error">("success");
   const [verifying, setVerifying] = useState(false);
@@ -201,11 +201,6 @@ export default function DataEntryPage() {
     return opt?.label ?? item.procedureKey;
   }
 
-  function maskHn(hn: string) {
-    if (!hn || hn.length <= 3) return "***";
-    return hn.slice(0, 2) + "*".repeat(hn.length - 3) + hn.slice(-1);
-  }
-
   const todayTotalCount = todayOpd.length + todayEr.length + todayCon.length + todayIpd.length + todayProcedures.length;
 
   const wardSelect = (val: string, onChange: (v: string) => void, style?: React.CSSProperties) => (
@@ -351,6 +346,20 @@ export default function DataEntryPage() {
             <div className="field-group"><label>วันที่ Admit</label><input type="date" value={admitDate} onChange={(e) => setAdmitDate(e.target.value)} required /></div>
             <button type="submit" className="de-submit-btn">บันทึก Admit</button>
           </form>
+
+          {todayIpd.filter((r) => r.stayType !== "ao").length > 0 && (
+            <div className="de-today-mini">
+              <h3>Admit ที่กรอกวันนี้</h3>
+              {todayIpd.filter((r) => r.stayType !== "ao").map((r) => (
+                <div key={r.id} className="de-row-item">
+                  <span className="de-row-badge" style={{ background: "#d97706" }}>Admit</span>
+                  <span>HN: <strong>{r.hn}</strong></span>
+                  <span style={{ color: "var(--muted)" }}>{r.ward}</span>
+                  <button className="btn-sm btn-delete" onClick={() => delToday("ipd", r.id)}>ลบ</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -370,6 +379,20 @@ export default function DataEntryPage() {
             </div>
             <button type="submit" className="de-submit-btn">บันทึก A/O</button>
           </form>
+
+          {todayIpd.filter((r) => r.stayType === "ao").length > 0 && (
+            <div className="de-today-mini">
+              <h3>A/O ที่กรอกวันนี้</h3>
+              {todayIpd.filter((r) => r.stayType === "ao").map((r) => (
+                <div key={r.id} className="de-row-item">
+                  <span className="de-row-badge" style={{ background: "#0d9488" }}>A/O</span>
+                  <span>{r.ward}</span>
+                  <span style={{ color: "var(--muted)" }}>Admit: {r.admitDate}</span>
+                  <button className="btn-sm btn-delete" onClick={() => delToday("ipd", r.id)}>ลบ</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -387,26 +410,41 @@ export default function DataEntryPage() {
             <button type="button" onClick={submitDcByForm} disabled={!dcHn.trim()} style={{ alignSelf: "flex-end" }}>บันทึก D/C</button>
           </div>
 
-          {openCases.length > 0 && (
-            <div className="de-dc-open">
-              <div className="de-dc-open-header">
-                <h3>ผู้ป่วยรอ D/C ({openCases.length} ราย)</h3>
-                <button type="button" className="de-hn-toggle" onClick={() => setShowHn(!showHn)}>
-                  {showHn ? "🔒 ซ่อน HN" : "👁️ เปิดดู HN"}
-                </button>
-              </div>
-              <div className="de-dc-list">
-                {openCases.map((c) => (
-                  <div key={`${c.hn}-${c.admitDate}`} className="de-dc-item">
-                    <button type="button" className="btn-sm" style={{ background: "#16a34a" }} onClick={() => doDc(c.hn)} title={`D/C วันที่ ${dcDate}`}>D/C</button>
-                    <strong>{showHn ? c.hn : maskHn(c.hn)}</strong>
-                    <span className="de-dc-ward">{c.ward}</span>
-                    <span className="de-dc-date">Admit: {c.admitDate}</span>
+          {openCases.length > 0 && (() => {
+            const dcFiltered = dcFilterWard === "__all__" ? openCases : openCases.filter((c) => c.ward === dcFilterWard);
+            return (
+              <div className="de-dc-open">
+                <div className="de-dc-open-header">
+                  <h3>ผู้ป่วยรอ D/C ({openCases.length} ราย)</h3>
+                  <select className="ipd-ward-filter" value={dcFilterWard} onChange={(e) => setDcFilterWard(e.target.value)}>
+                    <option value="__all__">ทุก Ward</option>
+                    {[...new Set(openCases.map((c) => c.ward))].sort().map((w) => (
+                      <option key={w} value={w}>{w} ({openCases.filter((c) => c.ward === w).length})</option>
+                    ))}
+                  </select>
+                </div>
+                {dcFilterWard !== "__all__" && (
+                  <div style={{ fontSize: "0.85rem", color: "#166534", fontWeight: 600, marginBottom: 8 }}>
+                    แสดง {dcFiltered.length} จาก {openCases.length} ราย (Ward: {dcFilterWard})
                   </div>
-                ))}
+                )}
+                {dcFiltered.length === 0 ? (
+                  <p style={{ color: "var(--muted)", textAlign: "center", padding: 8 }}>ไม่มีผู้ป่วยใน Ward {dcFilterWard}</p>
+                ) : (
+                  <div className="de-dc-list">
+                    {dcFiltered.map((c) => (
+                      <div key={`${c.hn}-${c.admitDate}`} className="de-dc-item">
+                        <button type="button" className="btn-sm" style={{ background: "#16a34a" }} onClick={() => doDc(c.hn)} title={`D/C วันที่ ${dcDate}`}>D/C</button>
+                        <strong>{c.hn}</strong>
+                        <span className="de-dc-ward">{c.ward}</span>
+                        <span className="de-dc-date">Admit: {c.admitDate}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
           {openCases.length === 0 && (
             <p style={{ color: "var(--muted)", textAlign: "center", padding: 16 }}>ไม่มีผู้ป่วยรอ D/C</p>
           )}
@@ -433,6 +471,20 @@ export default function DataEntryPage() {
             <div className="field-group"><label>จำนวนครั้ง</label><input type="number" min={1} value={procCount} onChange={(e) => setProcCount(Number(e.target.value) || 1)} /></div>
             <button type="submit" className="de-submit-btn">เพิ่มหัตถการ</button>
           </form>
+
+          {todayProcedures.length > 0 && (
+            <div className="de-today-mini">
+              <h3>หัตถการที่กรอกวันนี้</h3>
+              {todayProcedures.map((r) => (
+                <div key={r.id} className="de-row-item">
+                  <span className="de-row-badge" style={{ background: "#7c3aed" }}>หัตถการ</span>
+                  <span>{getProcedureLabel(r)}</span>
+                  <span><strong>{r.count}</strong> ครั้ง</span>
+                  <button className="btn-sm btn-delete" onClick={() => delToday("procedure", r.id)}>ลบ</button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
 
@@ -442,12 +494,6 @@ export default function DataEntryPage() {
           {backBtn}
           <div className="de-panel-header" style={{ "--card-accent": "#dc2626" } as React.CSSProperties}>
             <span>📅</span><h2>ข้อมูลวันนี้ ({todayIso()})</h2>
-          </div>
-
-          <div className="de-hn-toggle-row">
-            <button type="button" className="de-hn-toggle" onClick={() => setShowHn(!showHn)}>
-              {showHn ? "🔒 ซ่อน HN" : "👁️ เปิดดู HN"}
-            </button>
           </div>
 
           {/* OPD */}
@@ -524,7 +570,7 @@ export default function DataEntryPage() {
                       </>
                     ) : (
                       <>
-                        <span>{isAo ? "A/O" : `HN: ${showHn ? r.hn : maskHn(r.hn)}`}</span>
+                        <span>{isAo ? "A/O" : `HN: ${r.hn}`}</span>
                         <span style={{ color: "var(--muted)" }}>{r.ward}</span>
                         <button className="btn-sm btn-edit" onClick={() => { setEditIpdId(r.id); setEditIpdForm({ hn: isAo ? "" : r.hn, ward: r.ward, stayType: isAo ? "ao" : "admit" }); }}>แก้ไข</button>
                         <button className="btn-sm btn-delete" onClick={() => delToday("ipd", r.id)}>ลบ</button>
