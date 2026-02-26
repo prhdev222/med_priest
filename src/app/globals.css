@@ -1503,6 +1503,168 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
 }
 
+/* ─── Dashboard Accordion ─── */
+.dash-acc-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text);
+  margin-top: 12px;
+  padding: 14px 18px;
+  background: var(--surface) !important;
+  border: 1.5px solid var(--border) !important;
+  border-radius: 14px !important;
+  cursor: pointer;
+  transition: all 0.18s ease;
+  box-shadow: var(--shadow-sm);
+}
+.dash-acc-header:hover {
+  border-color: var(--acc-color, var(--primary)) !important;
+  box-shadow: 0 2px 12px rgba(37, 99, 235, 0.08) !important;
+  transform: none !important;
+}
+.dash-acc-header.open {
+  border-color: var(--acc-color, var(--primary)) !important;
+  border-bottom-left-radius: 0 !important;
+  border-bottom-right-radius: 0 !important;
+  background: linear-gradient(135deg, #f8fafc, #eff6ff) !important;
+  margin-bottom: 0;
+}
+.dash-acc-icon {
+  font-size: 22px;
+  flex-shrink: 0;
+}
+.dash-acc-title {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.dash-acc-badge {
+  color: #fff;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 3px 12px;
+  border-radius: 20px;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+.dash-acc-chevron {
+  font-size: 0.7rem;
+  color: var(--muted);
+  flex-shrink: 0;
+  transition: transform 0.22s ease;
+  margin-left: auto;
+}
+.dash-acc-chevron.open {
+  transform: rotate(90deg);
+}
+.dash-acc-body {
+  border: 1.5px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 14px 14px;
+  background: var(--surface-soft);
+  padding: 14px;
+  margin-bottom: 4px;
+  animation: accSlideDown 0.2s ease;
+}
+.dash-acc-body .chart-card {
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+.dash-acc-body .chart-card:last-child {
+  margin-bottom: 0;
+}
+@keyframes accSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Section Toggle Button ─── */
+.section-toggle-btn {
+  width: 100%;
+  text-align: left;
+  background: var(--surface-soft) !important;
+  color: var(--muted) !important;
+  border: 1px solid var(--border) !important;
+  padding: 10px 16px !important;
+  font-size: 0.88rem !important;
+  font-weight: 600 !important;
+  border-radius: 10px !important;
+  cursor: pointer;
+  margin-top: 10px;
+  transition: background 0.12s ease;
+}
+.section-toggle-btn:hover {
+  background: #f1f5f9 !important;
+  color: var(--text) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* ─── IPD Ward Detail Card ─── */
+.ipd-ward-detail {
+  border-color: #c4b5fd;
+  background: linear-gradient(135deg, #faf5ff, #ffffff);
+}
+
+.ipd-ward-stats-row {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px 0;
+}
+
+.ipd-ward-stat-card {
+  flex: 1;
+  min-width: 140px;
+  background: #fff;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 14px 18px;
+  text-align: center;
+}
+
+.ipd-ward-stat-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.ipd-ward-stat-value {
+  font-size: 1.6rem;
+  font-weight: 800;
+  margin-top: 2px;
+}
+
+@media (max-width: 640px) {
+  .dash-acc-header {
+    font-size: 0.88rem;
+    padding: 11px 12px;
+    gap: 6px;
+  }
+  .dash-acc-icon { font-size: 18px; }
+  .dash-acc-badge { font-size: 0.7rem; padding: 2px 8px; }
+  .dash-acc-body { padding: 8px; }
+  .ipd-ward-stats-row {
+    gap: 8px;
+  }
+  .ipd-ward-stat-card {
+    min-width: 100px;
+    padding: 10px 12px;
+  }
+  .ipd-ward-stat-value {
+    font-size: 1.3rem;
+  }
+}
+
 /* ─── LOS Card ─── */
 .los-card {
   display: inline-flex;

@@ -9,6 +9,7 @@ import {
 } from "@/lib/api";
 
 const wards = ["MED1", "MED2", "IMC", "Palliative", "ward90", "ICU", "__other__"];
+const PROC_WARD_OPTIONS = ["OPD", "ER", "MED1", "MED2", "IMC", "Palliative", "ward90", "ICU"];
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 type Section = "opd" | "admit" | "ao" | "dc" | "proc" | "today" | null;
@@ -54,6 +55,7 @@ export default function DataEntryPage() {
   const [procKey, setProcKey] = useState("");
   const [procLabel, setProcLabel] = useState("");
   const [procCount, setProcCount] = useState(1);
+  const [procWard, setProcWard] = useState("OPD");
   const [editProcId, setEditProcId] = useState<number | null>(null);
   const [editProcKey, setEditProcKey] = useState("");
   const [editProcLabel, setEditProcLabel] = useState("");
@@ -141,7 +143,7 @@ export default function DataEntryPage() {
     e.preventDefault(); setMsg("");
     if (!procKey) { flash("เลือกประเภทหัตถการ", "error"); return; }
     try {
-      await addProcedure({ code, date, procedureKey: procKey, procedureLabel: procKey === "other" ? procLabel : undefined, count: procCount });
+      await addProcedure({ code, date, procedureKey: procKey, procedureLabel: procKey === "other" ? procLabel : undefined, count: procCount, ward: procWard });
       setProcKey(""); setProcLabel(""); setProcCount(1);
       flash("บันทึกหัตถการสำเร็จ"); await loadToday(code);
     } catch (error) { flash((error as Error).message, "error"); }
@@ -459,7 +461,15 @@ export default function DataEntryPage() {
             <span>🩺</span><h2>หัตถการเฉพาะ</h2>
           </div>
           <form onSubmit={submitProcedure} className="entry-form">
-            <div className="field-group"><label>วันที่</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></div>
+            <div className="field-grid-2">
+              <div className="field-group"><label>วันที่</label><input type="date" value={date} onChange={(e) => setDate(e.target.value)} required /></div>
+              <div className="field-group">
+                <label>ทำที่ Ward</label>
+                <select value={procWard} onChange={(e) => setProcWard(e.target.value)}>
+                  {PROC_WARD_OPTIONS.map((w) => <option key={w} value={w}>{w}</option>)}
+                </select>
+              </div>
+            </div>
             <div className="field-group">
               <label>หัตถการ</label>
               <select value={procKey} onChange={(e) => setProcKey(e.target.value)} required>
@@ -479,6 +489,7 @@ export default function DataEntryPage() {
                 <div key={r.id} className="de-row-item">
                   <span className="de-row-badge" style={{ background: "#7c3aed" }}>หัตถการ</span>
                   <span>{getProcedureLabel(r)}</span>
+                  <span className="de-dc-ward">{r.ward || "-"}</span>
                   <span><strong>{r.count}</strong> ครั้ง</span>
                   <button className="btn-sm btn-delete" onClick={() => delToday("procedure", r.id)}>ลบ</button>
                 </div>
@@ -599,6 +610,7 @@ export default function DataEntryPage() {
                   ) : (
                     <>
                       <span>{getProcedureLabel(r)}</span>
+                      <span className="de-dc-ward">{r.ward || "-"}</span>
                       <span><strong>{r.count}</strong> ครั้ง</span>
                       <button className="btn-sm btn-edit" onClick={() => { setEditProcId(r.id); setEditProcKey(r.procedureKey); setEditProcLabel(r.procedureLabel || ""); setEditProcCount(r.count); }}>แก้ไข</button>
                       <button className="btn-sm btn-delete" onClick={() => delToday("procedure", r.id)}>ลบ</button>

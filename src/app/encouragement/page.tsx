@@ -95,7 +95,7 @@ export default function EncouragementPage() {
           <div className="field-grid-2">
             <div className="field-group">
               <label>ชื่อผู้ส่ง</label>
-              <input placeholder="ชื่อเล่น หรือไม่ใส่ก็ได้" value={name} onChange={(e) => setName(e.target.value)} />
+              <input placeholder="ชื่อเล่น หรือไม่ใส่ก็ได้" value={name} onChange={(e) => setName(e.target.value)} maxLength={100} />
             </div>
             <div className="field-group">
               <label>รหัสหน่วยงาน</label>
@@ -109,13 +109,14 @@ export default function EncouragementPage() {
             </div>
           </div>
           <div className="field-group">
-            <label>ข้อความกำลังใจ</label>
+            <label>ข้อความกำลังใจ <span style={{ fontSize: 12, color: message.length > 450 ? "var(--danger)" : "var(--muted)" }}>({message.length}/500)</span></label>
             <textarea
-              placeholder="พิมพ์ข้อความให้กำลังใจเพื่อนร่วมงาน..."
+              placeholder="พิมพ์ข้อความสั้นๆ ให้กำลังใจเพื่อนร่วมงาน..."
               value={message}
-              onChange={(e) => setMessage(e.target.value)}
+              onChange={(e) => { if (e.target.value.length <= 500) setMessage(e.target.value); }}
               required
               rows={3}
+              maxLength={500}
             />
           </div>
           <button disabled={loadingSubmit} style={{ justifySelf: "start" }}>

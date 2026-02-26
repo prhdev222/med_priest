@@ -135,16 +135,20 @@ async function getProcedureStats(db: D1Database, params: URLSearchParams) {
   const from = params.get("from") || "";
   const to = params.get("to") || "";
   const group = params.get("group") || "day";
+  const ward = params.get("ward") || "";
   if (!from || !to) throw new Error("from/to ไม่ถูกต้อง");
   const pk = (col: string) => periodExpr(group, col);
 
+  const wardFilter = ward ? " AND ward = ?3" : "";
+  const binds = ward ? [from, to, ward] : [from, to];
+
   const [rowsR, byProcR] = await Promise.all([
     db.prepare(
-      `SELECT ${pk("date")} as key, SUM(count) as total FROM procedures WHERE date BETWEEN ?1 AND ?2 GROUP BY 1 ORDER BY 1`
-    ).bind(from, to).all(),
+      `SELECT ${pk("date")} as key, SUM(count) as total FROM procedures WHERE date BETWEEN ?1 AND ?2${wardFilter} GROUP BY 1 ORDER BY 1`
+    ).bind(...binds).all(),
     db.prepare(
-      `SELECT procedure_key as procedureKey, procedure_label as procedureLabel, SUM(count) as count FROM procedures WHERE date BETWEEN ?1 AND ?2 GROUP BY procedure_key, procedure_label ORDER BY count DESC`
-    ).bind(from, to).all(),
+      `SELECT procedure_key as procedureKey, procedure_label as procedureLabel, SUM(count) as count FROM procedures WHERE date BETWEEN ?1 AND ?2${wardFilter} GROUP BY procedure_key, procedure_label ORDER BY count DESC`
+    ).bind(...binds).all(),
   ]);
 
   return {
@@ -190,7 +194,7 @@ async function getPatientDataAdmin(db: D1Database, params: URLSearchParams) {
     db.prepare(
       `SELECT id, hn, ward, admit_date as admitDate, discharge_date as dischargeDate, los, stay_type as stayType FROM ipd_stays WHERE admit_date = ?1 OR discharge_date = ?1 ORDER BY id DESC`
     ).bind(searchDate).all(),
-    db.prepare(`SELECT id, date, procedure_key as procedureKey, procedure_label as procedureLabel, count FROM procedures WHERE date = ?1 ORDER BY id DESC`).bind(searchDate).all(),
+    db.prepare(`SELECT id, date, procedure_key as procedureKey, procedure_label as procedureLabel, count, ward FROM procedures WHERE date = ?1 ORDER BY id DESC`).bind(searchDate).all(),
   ]);
   return { ipdOpen: ipdOpenR.results, opd: opdR.results, er: erR.results, consult: conR.results, ipd: ipdR.results, procedures: procR.results };
 }
@@ -203,7 +207,7 @@ async function getTodayEntries(db: D1Database, today: string) {
     db.prepare(
       `SELECT id, hn, ward, admit_date as admitDate, discharge_date as dischargeDate, los, stay_type as stayType FROM ipd_stays WHERE admit_date = ?1 ORDER BY id DESC`
     ).bind(today).all(),
-    db.prepare(`SELECT id, date, procedure_key as procedureKey, procedure_label as procedureLabel, count FROM procedures WHERE date = ?1 ORDER BY id DESC`).bind(today).all(),
+    db.prepare(`SELECT id, date, procedure_key as procedureKey, procedure_label as procedureLabel, count, ward FROM procedures WHERE date = ?1 ORDER BY id DESC`).bind(today).all(),
   ]);
   return { opd: opdR.results, er: erR.results, consult: conR.results, ipd: ipdR.results, procedures: procR.results };
 }
@@ -225,8 +229,8 @@ async function updateTodayRow(env: Env, body: Body) {
       .bind(Number(body.count || 0), rowId, today).run();
     if (r.meta.changes === 0) throw new Error("ไม่พบข้อมูลวันนี้ที่ต้องการแก้ไข");
   } else if (sheetType === "procedure") {
-    const r = await env.DB.prepare(`UPDATE procedures SET procedure_key=?1, procedure_label=?2, count=?3 WHERE id=?4 AND date=?5`)
-      .bind(first(body.procedureKey), first(body.procedureLabel), Number(body.count || 1), rowId, today).run();
+    const r = await env.DB.prepare(`UPDATE procedures SET procedure_key=?1, procedure_label=?2, count=?3, ward=?4 WHERE id=?5 AND date=?6`)
+      .bind(first(body.procedureKey), first(body.procedureLabel), Number(body.count || 1), first(body.ward), rowId, today).run();
     if (r.meta.changes === 0) throw new Error("ไม่พบข้อมูลวันนี้ที่ต้องการแก้ไข");
   } else if (sheetType === "ipd") {
     const stayType = first(body.stayType) || "admit";
@@ -280,10 +284,11 @@ async function addStatsRow(env: Env, body: Body) {
 async function addProcedure(env: Env, body: Body) {
   checkUnit(env, first(body.code));
   const date = first(body.date) || todayStr();
-  const procedureKey = first(body.procedureKey);
+  const procedureKey = first(body.procedureKey).slice(0, 100);
   if (!procedureKey) throw new Error("ระบุประเภทหัตถการ");
-  await env.DB.prepare(`INSERT INTO procedures (date, procedure_key, procedure_label, count) VALUES (?1, ?2, ?3, ?4)`)
-    .bind(date, procedureKey, first(body.procedureLabel), Number(body.count || 1))
+  const ward = first(body.ward).slice(0, 50);
+  await env.DB.prepare(`INSERT INTO procedures (date, procedure_key, procedure_label, count, ward) VALUES (?1, ?2, ?3, ?4, ?5)`)
+    .bind(date, procedureKey, first(body.procedureLabel).slice(0, 200), Number(body.count || 1), ward)
     .run();
   return { ok: true };
 }
@@ -341,18 +346,20 @@ async function addActivity(env: Env, body: Body) {
   await env.DB.prepare(
     `INSERT INTO activities (id, date, title, detail, type, image_url, image_caption, youtube_url, external_url) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)`
   )
-    .bind(id, first(body.date), first(body.title), first(body.detail), first(body.type), first(body.imageUrl), first(body.imageCaption), first(body.youtubeUrl), first(body.externalUrl))
+    .bind(id, first(body.date).slice(0, 10), first(body.title).slice(0, 200), first(body.detail).slice(0, 2000), first(body.type).slice(0, 50), first(body.imageUrl).slice(0, 500), first(body.imageCaption).slice(0, 300), first(body.youtubeUrl).slice(0, 500), first(body.externalUrl).slice(0, 500))
     .run();
   return { ok: true };
 }
 
 async function addEncouragement(env: Env, body: Body) {
   checkUnit(env, first(body.code, body.unitCode));
-  const name = first(body.name, body.author);
+  const name = first(body.name, body.author).slice(0, 100);
+  const message = first(body.message).slice(0, 500);
+  if (!message) throw new Error("กรุณาเขียนข้อความกำลังใจ");
   const id = crypto.randomUUID();
   const today = new Date().toISOString().slice(0, 10);
   await env.DB.prepare(`INSERT INTO encouragement (id, date, name, message) VALUES (?1,?2,?3,?4)`)
-    .bind(id, today, name, first(body.message))
+    .bind(id, today, name, message)
     .run();
   return { ok: true };
 }
@@ -422,8 +429,8 @@ async function updateRow(env: Env, body: Body) {
       .run();
     if (r.meta.changes === 0) throw new Error("ไม่พบข้อมูลที่ต้องการแก้ไข");
   } else if (sheetType === "procedure") {
-    const r = await env.DB.prepare(`UPDATE procedures SET date=?1, procedure_key=?2, procedure_label=?3, count=?4 WHERE id=?5`)
-      .bind(first(body.date), first(body.procedureKey), first(body.procedureLabel), Number(body.count || 1), rowId)
+    const r = await env.DB.prepare(`UPDATE procedures SET date=?1, procedure_key=?2, procedure_label=?3, count=?4, ward=?5 WHERE id=?6`)
+      .bind(first(body.date), first(body.procedureKey), first(body.procedureLabel), Number(body.count || 1), first(body.ward), rowId)
       .run();
     if (r.meta.changes === 0) throw new Error("ไม่พบข้อมูลที่ต้องการแก้ไข");
   } else {

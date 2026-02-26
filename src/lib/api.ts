@@ -78,6 +78,7 @@ export interface ProcedureAdminItem {
   procedureKey: string;
   procedureLabel: string;
   count: number;
+  ward?: string;
 }
 
 export interface ProcedureStatsResponse {
@@ -361,15 +362,15 @@ export async function getTodayEntries(code: string, date: string): Promise<Today
   };
 }
 
-const procedureStatsUrl = (from: string, to: string, group: GroupBy) =>
-  `/api/sheets?action=procedureStats&from=${from}&to=${to}&group=${group}`;
+const procedureStatsUrl = (from: string, to: string, group: GroupBy, ward?: string) =>
+  `/api/sheets?action=procedureStats&from=${from}&to=${to}&group=${group}${ward ? `&ward=${encodeURIComponent(ward)}` : ''}`;
 
-export async function getProcedureStats(from: string, to: string, group: GroupBy): Promise<ProcedureStatsResponse> {
-  return fetchApi(procedureStatsUrl(from, to, group));
+export async function getProcedureStats(from: string, to: string, group: GroupBy, ward?: string): Promise<ProcedureStatsResponse> {
+  return fetchApi(procedureStatsUrl(from, to, group, ward));
 }
 
-export function getProcedureStatsCached(from: string, to: string, group: GroupBy): ProcedureStatsResponse | null {
-  const raw = getClientCached<ProcedureStatsResponse>(procedureStatsUrl(from, to, group));
+export function getProcedureStatsCached(from: string, to: string, group: GroupBy, ward?: string): ProcedureStatsResponse | null {
+  const raw = getClientCached<ProcedureStatsResponse>(procedureStatsUrl(from, to, group, ward));
   if (!raw) return null;
   return {
     rows: Array.isArray(raw?.rows) ? raw.rows : [],
@@ -377,7 +378,7 @@ export function getProcedureStatsCached(from: string, to: string, group: GroupBy
   };
 }
 
-export async function addProcedure(payload: { code: string; date: string; procedureKey: string; procedureLabel?: string; count?: number }) {
+export async function addProcedure(payload: { code: string; date: string; procedureKey: string; procedureLabel?: string; count?: number; ward?: string }) {
   return fetchApi("/api/sheets", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS procedures (
   date            TEXT NOT NULL,
   procedure_key   TEXT NOT NULL,
   procedure_label TEXT DEFAULT '',
-  count           INTEGER NOT NULL DEFAULT 1
+  count           INTEGER NOT NULL DEFAULT 1,
+  ward            TEXT DEFAULT ''
 );
 
 -- Indexes for fast date-range queries
@@ -65,3 +66,4 @@ CREATE INDEX IF NOT EXISTS idx_er_date ON er(date);
 CREATE INDEX IF NOT EXISTS idx_ipd_admit ON ipd_stays(admit_date);
 CREATE INDEX IF NOT EXISTS idx_ipd_discharge ON ipd_stays(discharge_date);
 CREATE INDEX IF NOT EXISTS idx_procedures_date ON procedures(date);
+CREATE INDEX IF NOT EXISTS idx_procedures_ward ON procedures(ward);
