@@ -61,6 +61,9 @@ export default function AdminPage() {
   const [editCon, setEditCon] = useState<ConsultAdminItem | null>(null);
   const [eConForm, setEConForm] = useState({ date: "", count: 0 });
 
+  const [showIpdOpen, setShowIpdOpen] = useState(true);
+  const [filterWard, setFilterWard] = useState("__all__");
+
   const loadedRef = useRef(false);
 
   async function loadBase(code: string) {
@@ -268,32 +271,81 @@ export default function AdminPage() {
       {/* ═══ Tab: ข้อมูลผู้ป่วย ═══ */}
       {tab === "patients" && (
         <div className="admin-panel">
-          {/* IPD Open Cases */}
+          {/* IPD Open Cases — collapsible + grouped by date + ward filter */}
           <div className="admin-card" style={{ borderColor: "#f59e0b", borderWidth: 2 }}>
-            <h2 className="admin-card-title">🛏️ ผู้ป่วย IPD ที่ยังอยู่ในระบบ ({ipdOpen.length})</h2>
-            <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: "-8px 0 12px" }}>D/C แล้วจะหายออกจากรายการนี้อัตโนมัติ</p>
-            {ipdOpen.length === 0 ? <p className="admin-empty">ไม่มีผู้ป่วยค้างในระบบ</p> : (
-              <div style={{ overflowX: "auto" }}>
-                <table>
-                  <thead><tr><th>ID</th><th>HN</th><th>Ward</th><th>วัน Admit</th><th>จัดการ</th></tr></thead>
-                  <tbody>
-                    {ipdOpen.map((r) => (
-                      <tr key={r.id}>
-                        <td>{r.id}</td>
-                        <td><strong>{r.hn}</strong></td>
-                        <td>{r.ward}</td>
-                        <td>{r.admitDate}</td>
-                        <td>
-                          <div style={{ display: "flex", gap: 4 }}>
-                            <button className="btn-sm btn-edit" onClick={() => { setEditIpd(r as unknown as IpdAdminItem); setEIpdForm({ hn: r.hn, ward: r.ward, admitDate: r.admitDate, dischargeDate: "", stayType: "admit" }); }}>แก้ไข</button>
-                            <button className="btn-sm btn-delete" onClick={() => delPatient("ipd", r.id)}>ลบ</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="ipd-open-header">
+              <button type="button" className="ipd-open-toggle" onClick={() => setShowIpdOpen(!showIpdOpen)}>
+                <span className="ipd-open-chevron" style={{ transform: showIpdOpen ? "rotate(90deg)" : "rotate(0)" }}>▶</span>
+                <h2 style={{ margin: 0, fontSize: "1.05rem" }}>🛏️ ผู้ป่วย IPD ที่ยังอยู่ในระบบ ({ipdOpen.length})</h2>
+              </button>
+              {ipdOpen.length > 0 && showIpdOpen && (
+                <select className="ipd-ward-filter" value={filterWard} onChange={(e) => setFilterWard(e.target.value)}>
+                  <option value="__all__">ทุก Ward</option>
+                  {[...new Set(ipdOpen.map((r) => r.ward))].sort().map((w) => (
+                    <option key={w} value={w}>{w} ({ipdOpen.filter((r) => r.ward === w).length})</option>
+                  ))}
+                </select>
+              )}
+            </div>
+            <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: "4px 0 0" }}>D/C แล้วจะหายออกจากรายการนี้อัตโนมัติ {!showIpdOpen && ipdOpen.length > 0 ? `— กดเพื่อดูรายชื่อ ${ipdOpen.length} ราย` : ""}</p>
+
+            {showIpdOpen && (
+              <>
+                {ipdOpen.length === 0 ? <p className="admin-empty">ไม่มีผู้ป่วยค้างในระบบ</p> : (
+                  <div style={{ marginTop: 12 }}>
+                    {(() => {
+                      const filtered = filterWard === "__all__" ? ipdOpen : ipdOpen.filter((r) => r.ward === filterWard);
+                      if (filtered.length === 0) return <p className="admin-empty">ไม่มีผู้ป่วยใน Ward {filterWard}</p>;
+
+                      const grouped = filtered.reduce<Record<string, IpdOpenItem[]>>((acc, item) => {
+                        const key = item.admitDate || "ไม่ระบุวัน";
+                        if (!acc[key]) acc[key] = [];
+                        acc[key].push(item);
+                        return acc;
+                      }, {});
+                      const sortedDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+                      return (
+                        <>
+                          {filterWard !== "__all__" && (
+                            <div style={{ marginBottom: 10, fontSize: "0.88rem", color: "#92400e", fontWeight: 600 }}>
+                              แสดง {filtered.length} จาก {ipdOpen.length} ราย (Ward: {filterWard})
+                            </div>
+                          )}
+                          {sortedDates.map((dateKey) => (
+                            <div key={dateKey} className="ipd-date-group">
+                              <div className="ipd-date-label">
+                                <span>📅 Admit: {dateKey}</span>
+                                <span className="ipd-date-count">{grouped[dateKey].length} ราย</span>
+                              </div>
+                              <div style={{ overflowX: "auto" }}>
+                                <table>
+                                  <thead><tr><th>ID</th><th>HN</th><th>Ward</th><th>จัดการ</th></tr></thead>
+                                  <tbody>
+                                    {grouped[dateKey].map((r) => (
+                                      <tr key={r.id}>
+                                        <td>{r.id}</td>
+                                        <td><strong>{r.hn}</strong></td>
+                                        <td>{r.ward}</td>
+                                        <td>
+                                          <div style={{ display: "flex", gap: 4 }}>
+                                            <button className="btn-sm btn-edit" onClick={() => { setEditIpd(r as unknown as IpdAdminItem); setEIpdForm({ hn: r.hn, ward: r.ward, admitDate: r.admitDate, dischargeDate: "", stayType: "admit" }); }}>แก้ไข</button>
+                                            <button className="btn-sm btn-delete" onClick={() => delPatient("ipd", r.id)}>ลบ</button>
+                                          </div>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          ))}
+                        </>
+                      );
+                    })()}
+                  </div>
+                )}
+              </>
             )}
           </div>
 
