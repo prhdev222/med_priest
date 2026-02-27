@@ -69,6 +69,8 @@ export const PROCEDURE_OPTIONS = [
   { key: "wound_care", label: "Wound/Bedsore care" },
   { key: "egd", label: "EGD" },
   { key: "colonoscopy", label: "Colonoscopy" },
+  { key: "abi", label: "ABI" },
+  { key: "hemodialysis", label: "Hemodialysis" },
   { key: "other", label: "Other (ระบุเอง)" },
 ] as const;
 
