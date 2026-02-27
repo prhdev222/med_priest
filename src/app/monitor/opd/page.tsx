@@ -10,7 +10,7 @@ import {
   PROCEDURE_OPTIONS,
 } from "@/lib/api";
 import {
-  Bar, BarChart, CartesianGrid, Cell, Pie, PieChart,
+  Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
@@ -147,15 +147,17 @@ export default function MonitorOPD() {
 
         {/* Bar Chart */}
         <div className="monitor-card monitor-chart-wide">
-          <h3 className="monitor-chart-label">OPD 14 วันล่าสุด</h3>
+          <h3 className="monitor-chart-label">OPD 14 วันล่าสุด <span style={{ fontSize: "0.8rem", fontWeight: 400, color: "#64748b" }}>(จำนวนผู้ป่วยนอก — ราย)</span></h3>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartRows} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
+            <BarChart data={chartRows} margin={{ top: 24, right: 12, left: -8, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
               <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 13 }} />
-              <YAxis tick={{ fill: "#94a3b8", fontSize: 13 }} allowDecimals={false} />
+              <YAxis tick={{ fill: "#94a3b8", fontSize: 13 }} allowDecimals={false}
+                label={{ value: "ราย", position: "top", offset: 12, fill: "#94a3b8", fontSize: 13 }} />
               <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", color: "#f1f5f9" }}
                 formatter={(v: number) => [`${v} ราย`, "OPD"]} />
-              <Bar dataKey="opd" name="OPD" fill="#3b82f6" radius={[6, 6, 0, 0]}>
+              <Bar dataKey="opd" name="OPD (ราย)" fill="#3b82f6" radius={[6, 6, 0, 0]}>
+                <LabelList dataKey="opd" position="top" fill="#e2e8f0" fontSize={14} fontWeight={600} />
                 {chartRows.map((_, i) => <Cell key={i} fill={i === chartRows.length - 1 ? "#60a5fa" : "#3b82f6"} />)}
               </Bar>
             </BarChart>
@@ -167,19 +169,26 @@ export default function MonitorOPD() {
           <div className="monitor-card monitor-chart-pie">
             <h3 className="monitor-chart-label">สัดส่วนหัตถการ OPD</h3>
             <div className="monitor-pie-wrap">
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={100}
-                    paddingAngle={3} dataKey="value" nameKey="name"
-                    label={({ name, pct }) => `${name} ${pct}%`}
-                    labelLine={{ stroke: "#64748b" }}
-                  >
-                    {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", color: "#f1f5f9" }}
-                    formatter={(value: number, name: string) => [`${value} ครั้ง`, name]} />
-                </PieChart>
-              </ResponsiveContainer>
+              <div style={{ width: "100%", height: 280, overflow: "visible" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart margin={{ top: 20, right: 30, bottom: 10, left: 30 }}>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={80}
+                      paddingAngle={3} dataKey="value" nameKey="name"
+                      label={({ name, pct, x, y, textAnchor }) => (
+                        <text x={x} y={y} textAnchor={textAnchor} dominantBaseline="central"
+                          fill="#cbd5e1" fontSize={13} fontWeight={500}>
+                          {`${name} ${pct}%`}
+                        </text>
+                      )}
+                      labelLine={{ stroke: "#64748b" }}
+                    >
+                      {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", color: "#f1f5f9" }}
+                      formatter={(value: number, name: string) => [`${value} ครั้ง`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
               <div className="monitor-pie-legend">
                 {pieData.map((p, i) => (
                   <div key={p.name} className="monitor-pie-legend-item">

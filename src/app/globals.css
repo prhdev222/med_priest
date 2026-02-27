@@ -1971,7 +1971,13 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
 
 .monitor-chart-pie {
   grid-column: span 1;
-  min-height: 320px;
+  min-height: 360px;
+  overflow: visible;
+}
+
+.monitor-chart-pie .recharts-wrapper,
+.monitor-chart-pie .recharts-surface {
+  overflow: visible !important;
 }
 
 .monitor-chart-label {

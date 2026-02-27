@@ -13,7 +13,7 @@ import {
   PROCEDURE_OPTIONS,
 } from "@/lib/api";
 import {
-  Bar, BarChart, CartesianGrid, Cell, Pie, PieChart,
+  Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
@@ -187,16 +187,23 @@ export default function MonitorWard() {
 
         {/* IPD Admit/DC Chart */}
         <div className="monitor-card monitor-chart-wide">
-          <h3 className="monitor-chart-label">Admit / D/C — {wardName} (14 วันล่าสุด)</h3>
+          <h3 className="monitor-chart-label">Admit / D/C / A/O — {wardName} (14 วันล่าสุด) <span style={{ fontSize: "0.8rem", fontWeight: 400, color: "#64748b" }}>(จำนวนผู้ป่วยใน — ราย)</span></h3>
           <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={chartRows} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
+            <BarChart data={chartRows} margin={{ top: 24, right: 12, left: -8, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
               <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 13 }} />
-              <YAxis tick={{ fill: "#94a3b8", fontSize: 13 }} allowDecimals={false} />
+              <YAxis tick={{ fill: "#94a3b8", fontSize: 13 }} allowDecimals={false}
+                label={{ value: "ราย", position: "top", offset: 12, fill: "#94a3b8", fontSize: 13 }} />
               <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", color: "#f1f5f9" }} />
-              <Bar dataKey="admit" name="Admit" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="dc" name="D/C" fill="#22c55e" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="ao" name="A/O" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="admit" name="Admit (ราย)" fill="#f59e0b" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="admit" position="top" fill="#fbbf24" fontSize={13} fontWeight={600} />
+              </Bar>
+              <Bar dataKey="dc" name="D/C (ราย)" fill="#22c55e" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="dc" position="top" fill="#4ade80" fontSize={13} fontWeight={600} />
+              </Bar>
+              <Bar dataKey="ao" name="A/O (ราย)" fill="#8b5cf6" radius={[4, 4, 0, 0]}>
+                <LabelList dataKey="ao" position="top" fill="#a78bfa" fontSize={13} fontWeight={600} />
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>
@@ -204,15 +211,18 @@ export default function MonitorWard() {
         {/* Procedure Chart + Pie */}
         {totalProc > 0 && (
           <div className="monitor-card monitor-chart-wide">
-            <h3 className="monitor-chart-label">หัตถการ {wardName} ({totalProc} ครั้ง)</h3>
+            <h3 className="monitor-chart-label">หัตถการ {wardName} ({totalProc} ครั้ง) <span style={{ fontSize: "0.8rem", fontWeight: 400, color: "#64748b" }}>(จำนวนหัตถการ — ครั้ง)</span></h3>
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={procChartRows} margin={{ top: 8, right: 12, left: -8, bottom: 4 }}>
+              <BarChart data={procChartRows} margin={{ top: 24, right: 12, left: -8, bottom: 4 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#334155" />
                 <XAxis dataKey="label" tick={{ fill: "#94a3b8", fontSize: 13 }} />
-                <YAxis tick={{ fill: "#94a3b8", fontSize: 13 }} allowDecimals={false} />
+                <YAxis tick={{ fill: "#94a3b8", fontSize: 13 }} allowDecimals={false}
+                  label={{ value: "ครั้ง", position: "top", offset: 12, fill: "#94a3b8", fontSize: 13 }} />
                 <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", color: "#f1f5f9" }}
                   formatter={(v: number) => [`${v} ครั้ง`, "หัตถการ"]} />
-                <Bar dataKey="total" name="หัตถการ" fill="#8b5cf6" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="total" name="หัตถการ (ครั้ง)" fill="#8b5cf6" radius={[6, 6, 0, 0]}>
+                  <LabelList dataKey="total" position="top" fill="#e2e8f0" fontSize={14} fontWeight={600} />
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -222,18 +232,25 @@ export default function MonitorWard() {
           <div className="monitor-card monitor-chart-pie">
             <h3 className="monitor-chart-label">สัดส่วนหัตถการ {wardName}</h3>
             <div className="monitor-pie-wrap">
-              <ResponsiveContainer width="100%" height={260}>
-                <PieChart>
-                  <Pie data={pieData} cx="50%" cy="50%" innerRadius={50} outerRadius={100}
-                    paddingAngle={3} dataKey="value" nameKey="name"
-                    label={({ name, pct }) => `${name} ${pct}%`}
-                    labelLine={{ stroke: "#64748b" }}>
-                    {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                  </Pie>
-                  <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", color: "#f1f5f9" }}
-                    formatter={(value: number, name: string) => [`${value} ครั้ง`, name]} />
-                </PieChart>
-              </ResponsiveContainer>
+              <div style={{ width: "100%", height: 280, overflow: "visible" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart margin={{ top: 20, right: 30, bottom: 10, left: 30 }}>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={40} outerRadius={80}
+                      paddingAngle={3} dataKey="value" nameKey="name"
+                      label={({ name, pct, x, y, textAnchor }) => (
+                        <text x={x} y={y} textAnchor={textAnchor} dominantBaseline="central"
+                          fill="#cbd5e1" fontSize={13} fontWeight={500}>
+                          {`${name} ${pct}%`}
+                        </text>
+                      )}
+                      labelLine={{ stroke: "#64748b" }}>
+                      {pieData.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", color: "#f1f5f9" }}
+                      formatter={(value: number, name: string) => [`${value} ครั้ง`, name]} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
               <div className="monitor-pie-legend">
                 {pieData.map((p, i) => (
                   <div key={p.name} className="monitor-pie-legend-item">
