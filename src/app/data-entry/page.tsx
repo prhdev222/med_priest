@@ -298,7 +298,7 @@ export default function DataEntryPage() {
       {/* ── Nurse Encouragement ── */}
       {!unlocked && (
         <div className="de-nurse-hero">
-          <Image src="/NurseHeart.png" alt="Nurse Heart" width={160} height={160} className="de-nurse-img" priority />
+          <Image src="/NurseHeart.png" alt="Nurse Heart" width={100} height={100} className="de-nurse-img" priority />
           <div className="de-nurse-text">
             <p className="de-nurse-quote">&ldquo;{nurseQuote}&rdquo;</p>
             <p className="de-nurse-sub">อายุรกรรม รพ.สงฆ์ — ขอบคุณที่ตั้งใจกรอกข้อมูลทุกวัน</p>
@@ -336,13 +336,15 @@ export default function DataEntryPage() {
             const cnt = openCases.filter((c) => c.ward === ward).length;
             return (
               <button key={ward} className="de-ward-dc-card" onClick={() => { resetChat(); setActiveSection(ward === "MED1" ? "dcMed1" : "dcMed2"); }}>
-                <Image src={`/${ward}head.png`} alt={ward} width={72} height={72} className="de-ward-dc-img" />
-                <div className="de-ward-dc-text">
-                  <span className="de-ward-dc-name">D/C ผู้ป่วย {ward}</span>
-                  <span className="de-ward-dc-hint">เข้ามากรอกวัน D/C ผู้ป่วยของ {ward}</span>
+                <div className="de-ward-dc-top">
+                  <div className="de-ward-dc-text">
+                    <span className="de-ward-dc-name">D/C ผู้ป่วย {ward}</span>
+                    <span className="de-ward-dc-hint">เข้ามากรอกวัน D/C ผู้ป่วยของ {ward}</span>
+                  </div>
+                  {cnt > 0 && <span className="de-menu-badge">{cnt}</span>}
+                  <span className="de-menu-arrow">›</span>
                 </div>
-                {cnt > 0 && <span className="de-menu-badge">{cnt}</span>}
-                <span className="de-menu-arrow">›</span>
+                <Image src={`/${ward}head.png`} alt={ward} width={150} height={150} className="de-ward-dc-img" />
               </button>
             );
           })}
