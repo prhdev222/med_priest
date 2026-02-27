@@ -24,7 +24,24 @@ const NURSE_QUOTES = [
   "ทุกครั้งที่กรอก คือการสร้างอนาคตที่ดีกว่าให้แผนกเรา 📊",
 ];
 
-type Section = "opd" | "admit" | "ao" | "dc" | "proc" | "today" | null;
+type Section = "opd" | "admit" | "ao" | "dc" | "proc" | "today" | "dcMed1" | "dcMed2" | null;
+
+const MED_DC_QUOTES: Record<string, string[]> = {
+  MED1: [
+    "พยาบาล MED1 สุดแกร่ง! ช่วย D/C ให้คนไข้กลับบ้านอย่างปลอดภัย 🏠💚",
+    "D/C วันนี้ = ความสุขของคนไข้ ขอบคุณทีม MED1 ค่ะ 🌈",
+    "MED1 ดูแลด้วยใจ ส่งท่านกลับบ้านด้วยรอยยิ้ม 😊🙏",
+    "กดปุ่ม D/C ให้คนไข้กลับบ้าน — วันนี้ MED1 สู้ๆ! 💪✨",
+  ],
+  MED2: [
+    "พยาบาล MED2 เก่งมาก! ช่วย D/C ส่งท่านกลับบ้านนะคะ 🏡💛",
+    "D/C สำเร็จทุกราย เพราะทีม MED2 ไม่เคยย่อท้อ 🌟",
+    "MED2 ส่งคนไข้กลับบ้านอย่างอบอุ่น ขอบคุณค่ะ 🤗🙏",
+    "ทุก D/C คือความสำเร็จของทีม MED2 — สู้ๆ นะคะ! 💪🌸",
+  ],
+};
+
+type ChatStep = "select_hn" | "select_date" | "confirm" | "done";
 
 const SECTIONS: { key: Section; icon: string; label: string; desc: string; color: string }[] = [
   { key: "opd", icon: "🏥", label: "OPD / ER / Consult", desc: "บันทึกจำนวนผู้ป่วยนอกรายวัน", color: "#2563eb" },
@@ -82,6 +99,43 @@ export default function DataEntryPage() {
   const [editIpdId, setEditIpdId] = useState<number | null>(null);
   const [editIpdForm, setEditIpdForm] = useState<{ hn: string; ward: string; stayType?: string }>({ hn: "", ward: wards[0] });
   const [editIpdWardCustom, setEditIpdWardCustom] = useState("");
+
+  // Chatbot D/C state
+  const [chatStep, setChatStep] = useState<ChatStep>("select_hn");
+  const [chatSelectedHn, setChatSelectedHn] = useState("");
+  const [chatSelectedAdmit, setChatSelectedAdmit] = useState("");
+  const [chatDcDate, setChatDcDate] = useState(todayIso());
+  const [chatLoading, setChatLoading] = useState(false);
+  const [chatDcResult, setChatDcResult] = useState<{ ok: boolean; los?: number; error?: string } | null>(null);
+  const [chatMode, setChatMode] = useState<"chat" | "form">("chat");
+  const chatWard = activeSection === "dcMed1" ? "MED1" : activeSection === "dcMed2" ? "MED2" : "";
+  const chatQuote = useMemo(() => {
+    const q = MED_DC_QUOTES[chatWard] || MED_DC_QUOTES.MED1;
+    return q[Math.floor(Math.random() * q.length)];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeSection]);
+  const chatWardCases = useMemo(() => openCases.filter((c) => c.ward === chatWard), [openCases, chatWard]);
+
+  function resetChat() {
+    setChatStep("select_hn");
+    setChatSelectedHn("");
+    setChatSelectedAdmit("");
+    setChatDcDate(todayIso());
+    setChatLoading(false);
+    setChatDcResult(null);
+  }
+
+  async function chatDoDc() {
+    setChatLoading(true);
+    try {
+      const res = await addIpdDischarge({ code, hn: chatSelectedHn, dischargeDate: chatDcDate }) as { ok?: boolean; los?: number };
+      setChatDcResult({ ok: true, los: res?.los });
+      setChatStep("done");
+      await Promise.all([loadOpenCases(code), loadToday(code)]);
+    } catch (err) {
+      setChatDcResult({ ok: false, error: (err as Error).message });
+    } finally { setChatLoading(false); }
+  }
 
   function flash(text: string, type: "success" | "error" = "success") {
     setMsg(text); setMsgType(type);
@@ -275,7 +329,25 @@ export default function DataEntryPage() {
         <p style={{ color: "var(--muted)", marginTop: 8 }}>กรอกรหัสหน่วยงานเพื่อเริ่มใช้งาน</p>
       )}
 
-      {unlocked && activeSection === null && (
+      {unlocked && activeSection === null && (<>
+        {/* Quick D/C MED1 & MED2 */}
+        <div className="de-ward-dc-row">
+          {(["MED1", "MED2"] as const).map((ward) => {
+            const cnt = openCases.filter((c) => c.ward === ward).length;
+            return (
+              <button key={ward} className="de-ward-dc-card" onClick={() => { resetChat(); setActiveSection(ward === "MED1" ? "dcMed1" : "dcMed2"); }}>
+                <Image src={`/${ward}head.png`} alt={ward} width={72} height={72} className="de-ward-dc-img" />
+                <div className="de-ward-dc-text">
+                  <span className="de-ward-dc-name">D/C ผู้ป่วย {ward}</span>
+                  <span className="de-ward-dc-hint">เข้ามากรอกวัน D/C ผู้ป่วยของ {ward}</span>
+                </div>
+                {cnt > 0 && <span className="de-menu-badge">{cnt}</span>}
+                <span className="de-menu-arrow">›</span>
+              </button>
+            );
+          })}
+        </div>
+
         <div className="de-menu-grid">
           {SECTIONS.map((s) => (
             <button key={s.key} className="de-menu-card" onClick={() => setActiveSection(s.key)} style={{ "--card-accent": s.color } as React.CSSProperties}>
@@ -294,7 +366,7 @@ export default function DataEntryPage() {
             </button>
           ))}
         </div>
-      )}
+      </>)}
 
       {/* ══════════════════ OPD / ER / Consult ══════════════════ */}
       {unlocked && activeSection === "opd" && (
@@ -657,6 +729,169 @@ export default function DataEntryPage() {
 
           {todayTotalCount === 0 && (
             <p style={{ color: "var(--muted)", textAlign: "center", padding: 24 }}>ยังไม่มีข้อมูลที่กรอกวันนี้</p>
+          )}
+        </div>
+      )}
+
+      {/* ══════════════════ Chatbot D/C MED1 / MED2 ══════════════════ */}
+      {unlocked && (activeSection === "dcMed1" || activeSection === "dcMed2") && (
+        <div className="de-panel">
+          <button type="button" className="de-back-btn" onClick={() => { setActiveSection(null); resetChat(); setMsg(""); }}>← กลับเมนูหลัก</button>
+
+          {/* Header with avatar */}
+          <div className="chat-dc-header">
+            <Image src={`/${chatWard}head.png`} alt={chatWard} width={56} height={56} className="chat-dc-avatar" />
+            <div>
+              <h2 className="chat-dc-title">D/C ผู้ป่วย {chatWard}</h2>
+              <p className="chat-dc-quote">{chatQuote}</p>
+            </div>
+          </div>
+
+          {/* Mode toggle */}
+          <div className="chat-dc-mode-toggle">
+            <button type="button" className={chatMode === "chat" ? "active" : ""} onClick={() => setChatMode("chat")}>💬 Chatbot</button>
+            <button type="button" className={chatMode === "form" ? "active" : ""} onClick={() => setChatMode("form")}>📝 Form ธรรมดา</button>
+          </div>
+
+          {/* ─── Chat Mode ─── */}
+          {chatMode === "chat" && (
+            <div className="chat-dc-body">
+              {/* Step 1: Select HN */}
+              <div className="chat-bubble bot">
+                <Image src={`/${chatWard}head.png`} alt={chatWard} width={36} height={36} className="chat-bubble-avatar" />
+                <div className="chat-bubble-content">
+                  {chatWardCases.length === 0
+                    ? `ไม่มีผู้ป่วยรอ D/C ใน ${chatWard} ค่ะ 🎉`
+                    : `เลือก HN ของผู้ป่วย ${chatWard} ที่จะ D/C ค่ะ (${chatWardCases.length} ราย)`
+                  }
+                </div>
+              </div>
+
+              {chatStep === "select_hn" && chatWardCases.length > 0 && (
+                <div className="chat-hn-list">
+                  {chatWardCases.map((c) => (
+                    <button key={`${c.hn}-${c.admitDate}`} className="chat-hn-btn"
+                      onClick={() => { setChatSelectedHn(c.hn); setChatSelectedAdmit(c.admitDate); setChatStep("select_date"); }}>
+                      <strong>HN {c.hn}</strong>
+                      <span>Admit: {c.admitDate}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
+              {/* Step 2: Select date */}
+              {(chatStep === "select_date" || chatStep === "confirm" || chatStep === "done") && (
+                <div className="chat-bubble user">
+                  <div className="chat-bubble-content">HN {chatSelectedHn} (Admit: {chatSelectedAdmit})</div>
+                </div>
+              )}
+
+              {(chatStep === "select_date" || chatStep === "confirm" || chatStep === "done") && (
+                <div className="chat-bubble bot">
+                  <Image src={`/${chatWard}head.png`} alt={chatWard} width={36} height={36} className="chat-bubble-avatar" />
+                  <div className="chat-bubble-content">วัน D/C วันไหนคะ?</div>
+                </div>
+              )}
+
+              {chatStep === "select_date" && (
+                <div className="chat-input-row">
+                  <input type="date" value={chatDcDate} onChange={(e) => setChatDcDate(e.target.value)} className="chat-date-input" />
+                  <button type="button" className="chat-send-btn" onClick={() => setChatStep("confirm")}>ถัดไป →</button>
+                </div>
+              )}
+
+              {/* Step 3: Confirm */}
+              {(chatStep === "confirm" || chatStep === "done") && (
+                <div className="chat-bubble user">
+                  <div className="chat-bubble-content">วันที่ D/C: {chatDcDate}</div>
+                </div>
+              )}
+
+              {chatStep === "confirm" && (
+                <>
+                  <div className="chat-bubble bot">
+                    <Image src={`/${chatWard}head.png`} alt={chatWard} width={36} height={36} className="chat-bubble-avatar" />
+                    <div className="chat-bubble-content">
+                      ยืนยัน D/C <strong>HN {chatSelectedHn}</strong> วันที่ <strong>{chatDcDate}</strong> นะคะ?
+                    </div>
+                  </div>
+                  <div className="chat-confirm-row">
+                    <button type="button" className="chat-confirm-btn yes" onClick={chatDoDc} disabled={chatLoading}>
+                      {chatLoading ? "กำลังบันทึก..." : "✓ ยืนยัน D/C"}
+                    </button>
+                    <button type="button" className="chat-confirm-btn no" onClick={resetChat} disabled={chatLoading}>✗ ยกเลิก</button>
+                  </div>
+                </>
+              )}
+
+              {/* Step 4: Done */}
+              {chatStep === "done" && chatDcResult && (
+                <>
+                  <div className="chat-bubble bot">
+                    <Image src={`/${chatWard}head.png`} alt={chatWard} width={36} height={36} className="chat-bubble-avatar" />
+                    <div className="chat-bubble-content">
+                      {chatDcResult.ok
+                        ? <>D/C HN {chatSelectedHn} สำเร็จแล้วค่ะ! 🎉{chatDcResult.los ? ` (LOS: ${chatDcResult.los} วัน)` : ""}<br />ขอบคุณที่กรอกข้อมูลนะคะ 💚</>
+                        : <>เกิดข้อผิดพลาด: {chatDcResult.error} 😢</>
+                      }
+                    </div>
+                  </div>
+                  <div className="chat-confirm-row">
+                    <button type="button" className="chat-confirm-btn yes" onClick={resetChat}>D/C รายถัดไป</button>
+                    <button type="button" className="chat-confirm-btn no" onClick={() => { setActiveSection(null); resetChat(); }}>กลับเมนูหลัก</button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* ─── Form Mode ─── */}
+          {chatMode === "form" && (
+            <div className="chat-dc-form-mode">
+              <div className="de-dc-form-row">
+                <div className="field-group"><label>วันที่ D/C</label><input type="date" value={chatDcDate} onChange={(e) => setChatDcDate(e.target.value)} /></div>
+                <div className="field-group" style={{ flex: "1 1 120px" }}><label>กรอก HN</label><input placeholder="เลข HN" value={chatSelectedHn} onChange={(e) => setChatSelectedHn(e.target.value)} /></div>
+                <button type="button" disabled={!chatSelectedHn.trim() || chatLoading} style={{ alignSelf: "flex-end" }}
+                  onClick={async () => {
+                    if (!chatSelectedHn.trim()) return;
+                    setChatLoading(true);
+                    try {
+                      await addIpdDischarge({ code, hn: chatSelectedHn.trim(), dischargeDate: chatDcDate });
+                      flash(`D/C HN ${chatSelectedHn} สำเร็จ`);
+                      setChatSelectedHn("");
+                      await Promise.all([loadOpenCases(code), loadToday(code)]);
+                    } catch (err) { flash((err as Error).message, "error"); }
+                    finally { setChatLoading(false); }
+                  }}>บันทึก D/C</button>
+              </div>
+              {chatWardCases.length > 0 && (
+                <div className="de-dc-open">
+                  <h3>ผู้ป่วยรอ D/C ใน {chatWard} ({chatWardCases.length} ราย)</h3>
+                  <div className="de-dc-list">
+                    {chatWardCases.map((c) => (
+                      <div key={`${c.hn}-${c.admitDate}`} className="de-dc-item">
+                        <button type="button" className="btn-sm" style={{ background: "#16a34a" }}
+                          onClick={async () => {
+                            if (!confirm(`ยืนยัน D/C HN ${c.hn} วันที่ ${chatDcDate}?`)) return;
+                            setChatLoading(true);
+                            try {
+                              await addIpdDischarge({ code, hn: c.hn, dischargeDate: chatDcDate });
+                              flash(`D/C HN ${c.hn} สำเร็จ`);
+                              await Promise.all([loadOpenCases(code), loadToday(code)]);
+                            } catch (err) { flash((err as Error).message, "error"); }
+                            finally { setChatLoading(false); }
+                          }}>D/C</button>
+                        <strong>{c.hn}</strong>
+                        <span className="de-dc-date">Admit: {c.admitDate}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {chatWardCases.length === 0 && (
+                <p style={{ color: "var(--muted)", textAlign: "center", padding: 16 }}>ไม่มีผู้ป่วยรอ D/C ใน {chatWard}</p>
+              )}
+            </div>
           )}
         </div>
       )}
