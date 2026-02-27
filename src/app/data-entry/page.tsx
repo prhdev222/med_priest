@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useState, useCallback } from "react";
+import Image from "next/image";
+import { FormEvent, useState, useCallback, useMemo } from "react";
 import {
   addIpdAdmit, addIpdDischarge, addStatsRow, addProcedure,
   getIpdOpenCases, getTodayEntries, updateTodayRow, deleteTodayRow,
@@ -11,6 +12,17 @@ import {
 const wards = ["MED1", "MED2", "IMC", "Palliative", "ward90", "ICU", "__other__"];
 const PROC_WARD_OPTIONS = ["OPD", "ER", "MED1", "MED2", "IMC", "Palliative", "ward90", "ICU", "__other__"];
 const todayIso = () => new Date().toISOString().slice(0, 10);
+
+const NURSE_QUOTES = [
+  "ทุกตัวเลขที่กรอก คือหลักฐานของความทุ่มเท 💛",
+  "คนไข้อาจไม่รู้ แต่ข้อมูลจะบอกเล่าความเสียสละของพวกเรา 🌟",
+  "สู้ๆ นะคะ พยาบาลอายุรกรรม รพ.สงฆ์ ทุกคน! 💪",
+  "ทุกวันที่เหนื่อย คือวันที่เราช่วยชีวิตพระสงฆ์ 🙏",
+  "คนน้อย แต่ใจใหญ่ — ขอบคุณที่ไม่ย่อท้อ ❤️",
+  "ข้อมูลดี เพราะคนกรอกดี — ขอบคุณทุกคนค่ะ 🌸",
+  "แม้งานหนัก แต่เรามีกันและกัน สู้ไปด้วยกัน! ✨",
+  "ทุกครั้งที่กรอก คือการสร้างอนาคตที่ดีกว่าให้แผนกเรา 📊",
+];
 
 type Section = "opd" | "admit" | "ao" | "dc" | "proc" | "today" | null;
 
@@ -220,12 +232,25 @@ export default function DataEntryPage() {
     </button>
   );
 
+  const nurseQuote = useMemo(() => NURSE_QUOTES[Math.floor(Math.random() * NURSE_QUOTES.length)], []);
+
   return (
     <section className="entry-section">
       <div className="page-header">
         <h1>📝 กรอกข้อมูลผู้ป่วย</h1>
         <p>เลือกหมวดหมู่ แล้วกรอกข้อมูล — กรอกวันนี้แก้ไขได้ทันที</p>
       </div>
+
+      {/* ── Nurse Encouragement ── */}
+      {!unlocked && (
+        <div className="de-nurse-hero">
+          <Image src="/NurseHeart.png" alt="Nurse Heart" width={160} height={160} className="de-nurse-img" priority />
+          <div className="de-nurse-text">
+            <p className="de-nurse-quote">&ldquo;{nurseQuote}&rdquo;</p>
+            <p className="de-nurse-sub">อายุรกรรม รพ.สงฆ์ — ขอบคุณที่ตั้งใจกรอกข้อมูลทุกวัน</p>
+          </div>
+        </div>
+      )}
 
       {/* ── Unlock ── */}
       <div className="de-unlock-card">
