@@ -139,10 +139,12 @@ async function getProcedureStats(db: D1Database, params: URLSearchParams) {
   if (!from || !to) throw new Error("from/to ไม่ถูกต้อง");
   const pk = (col: string) => periodExpr(group, col);
 
+  const isConsult = ward === "Consult";
   const wardFilter = ward === "OPD"
     ? " AND (ward = ?3 OR ward = '' OR ward IS NULL)"
+    : isConsult ? " AND ward LIKE 'Consult%'"
     : ward ? " AND ward = ?3" : "";
-  const binds = ward ? [from, to, ward] : [from, to];
+  const binds = isConsult ? [from, to] : ward ? [from, to, ward] : [from, to];
 
   const [rowsR, byProcR] = await Promise.all([
     db.prepare(

@@ -9,7 +9,7 @@ import {
 } from "@/lib/api";
 
 const wards = ["MED1", "MED2", "IMC", "Palliative", "ward90", "ICU", "__other__"];
-const PROC_WARD_OPTIONS = ["OPD", "ER", "MED1", "MED2", "IMC", "Palliative", "ward90", "ICU"];
+const PROC_WARD_OPTIONS = ["OPD", "ER", "MED1", "MED2", "IMC", "Palliative", "ward90", "ICU", "__other__"];
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 type Section = "opd" | "admit" | "ao" | "dc" | "proc" | "today" | null;
@@ -56,6 +56,7 @@ export default function DataEntryPage() {
   const [procLabel, setProcLabel] = useState("");
   const [procCount, setProcCount] = useState(1);
   const [procWard, setProcWard] = useState("OPD");
+  const [procWardOther, setProcWardOther] = useState("");
   const [editProcId, setEditProcId] = useState<number | null>(null);
   const [editProcKey, setEditProcKey] = useState("");
   const [editProcLabel, setEditProcLabel] = useState("");
@@ -142,9 +143,11 @@ export default function DataEntryPage() {
   async function submitProcedure(e: FormEvent) {
     e.preventDefault(); setMsg("");
     if (!procKey) { flash("เลือกประเภทหัตถการ", "error"); return; }
+    if (procWard === "__other__" && !procWardOther.trim()) { flash("กรุณาระบุชื่อ Ward", "error"); return; }
+    const wardValue = procWard === "__other__" ? `Consult(${procWardOther.trim()})` : procWard;
     try {
-      await addProcedure({ code, date, procedureKey: procKey, procedureLabel: procKey === "other" ? procLabel : undefined, count: procCount, ward: procWard });
-      setProcKey(""); setProcLabel(""); setProcCount(1);
+      await addProcedure({ code, date, procedureKey: procKey, procedureLabel: procKey === "other" ? procLabel : undefined, count: procCount, ward: wardValue });
+      setProcKey(""); setProcLabel(""); setProcCount(1); setProcWardOther("");
       flash("บันทึกหัตถการสำเร็จ"); await loadToday(code);
     } catch (error) { flash((error as Error).message, "error"); }
   }
@@ -466,9 +469,15 @@ export default function DataEntryPage() {
               <div className="field-group">
                 <label>ทำที่ Ward</label>
                 <select value={procWard} onChange={(e) => setProcWard(e.target.value)}>
-                  {PROC_WARD_OPTIONS.map((w) => <option key={w} value={w}>{w}</option>)}
+                  {PROC_WARD_OPTIONS.map((w) => <option key={w} value={w}>{w === "__other__" ? "อื่นๆ (Consult นอกแผนก)" : w}</option>)}
                 </select>
               </div>
+              {procWard === "__other__" && (
+                <div className="field-group">
+                  <label>ระบุชื่อ Ward (Consult นอกแผนก)</label>
+                  <input placeholder="เช่น ศัลยกรรม, สูตินรีเวช" value={procWardOther} onChange={(e) => setProcWardOther(e.target.value)} required />
+                </div>
+              )}
             </div>
             <div className="field-group">
               <label>หัตถการ</label>

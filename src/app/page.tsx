@@ -273,12 +273,14 @@ export default function DashboardPage() {
   const [procedureStats, setProcedureStats] = useState<ProcedureStatsResponse>({ rows: [], byProcedure: [] });
   const [procOpdStats, setProcOpdStats] = useState<ProcedureStatsResponse>({ rows: [], byProcedure: [] });
   const [procErStats, setProcErStats] = useState<ProcedureStatsResponse>({ rows: [], byProcedure: [] });
+  const [procConsultStats, setProcConsultStats] = useState<ProcedureStatsResponse>({ rows: [], byProcedure: [] });
   const [ipdWardProcStats, setIpdWardProcStats] = useState<ProcedureStatsResponse>({ rows: [], byProcedure: [] });
   const [procedurePieOpen, setProcedurePieOpen] = useState(false);
   const [opdProcPieOpen, setOpdProcPieOpen] = useState(false);
   const [erProcPieOpen, setErProcPieOpen] = useState(false);
+  const [consultProcPieOpen, setConsultProcPieOpen] = useState(false);
   const [ipdProcPieOpen, setIpdProcPieOpen] = useState(false);
-  const [pieFullscreen, setPieFullscreen] = useState<"ward" | "procedure" | "opdProc" | "erProc" | "ipdProc" | null>(null);
+  const [pieFullscreen, setPieFullscreen] = useState<"ward" | "procedure" | "opdProc" | "erProc" | "consultProc" | "ipdProc" | null>(null);
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
   const toggleSection = useCallback((key: string) => {
     setOpenSections((prev) => { const n = new Set(prev); n.has(key) ? n.delete(key) : n.add(key); return n; });
@@ -343,7 +345,7 @@ export default function DashboardPage() {
   useEffect(() => { const cleanup = fetchData(); return cleanup; }, [fetchData]);
 
   /* ── Lazy fetch: load procedure data only when accordion sections are opened ── */
-  const procFetchedRef = useMemo(() => ({ opd: "", er: "", proc: "" }), []);
+  const procFetchedRef = useMemo(() => ({ opd: "", er: "", consult: "", proc: "" }), []);
 
   useEffect(() => {
     if (useMock) return;
@@ -359,6 +361,12 @@ export default function DashboardPage() {
       procFetchedRef.er = cacheKey;
       getProcedureStats(fromReqRef, to, group, "ER")
         .then((r) => setProcErStats({ rows: r?.rows ?? [], byProcedure: r?.byProcedure ?? [] }))
+        .catch(() => {});
+    }
+    if (openSections.has("consult") && procFetchedRef.consult !== cacheKey) {
+      procFetchedRef.consult = cacheKey;
+      getProcedureStats(fromReqRef, to, group, "Consult")
+        .then((r) => setProcConsultStats({ rows: r?.rows ?? [], byProcedure: r?.byProcedure ?? [] }))
         .catch(() => {});
     }
     if (openSections.has("proc") && procFetchedRef.proc !== cacheKey) {
@@ -472,12 +480,14 @@ export default function DashboardPage() {
 
   const procOpdPie = useMemo(() => procPieData(viewProcOpdStats.byProcedure), [viewProcOpdStats]);
   const procErPie = useMemo(() => procPieData(viewProcErStats.byProcedure), [viewProcErStats]);
+  const procConsultPie = useMemo(() => procPieData(procConsultStats.byProcedure), [procConsultStats]);
   const procedurePieData = useMemo(() => procPieData(viewProcedureStats.byProcedure), [viewProcedureStats]);
   const ipdWardProcPie = useMemo(() => procPieData(viewIpdWardProcStats.byProcedure), [viewIpdWardProcStats]);
 
   const procedureChartRows = useMemo(() => viewProcedureStats.rows.map((r) => ({ ...r, label: shortLabel(r.key, group) })), [viewProcedureStats.rows, group]);
   const procOpdChartRows = useMemo(() => viewProcOpdStats.rows.map((r) => ({ ...r, label: shortLabel(r.key, group) })), [viewProcOpdStats.rows, group]);
   const procErChartRows = useMemo(() => viewProcErStats.rows.map((r) => ({ ...r, label: shortLabel(r.key, group) })), [viewProcErStats.rows, group]);
+  const procConsultChartRows = useMemo(() => procConsultStats.rows.map((r) => ({ ...r, label: shortLabel(r.key, group) })), [procConsultStats.rows, group]);
   const ipdWardProcChartRows = useMemo(() => viewIpdWardProcStats.rows.map((r) => ({ ...r, label: shortLabel(r.key, group) })), [viewIpdWardProcStats.rows, group]);
 
   const totals = useMemo(() => {
@@ -490,6 +500,7 @@ export default function DashboardPage() {
 
   const totalProcOpd = viewProcOpdStats.rows.reduce((s, r) => s + (r.total ?? 0), 0);
   const totalProcEr = viewProcErStats.rows.reduce((s, r) => s + (r.total ?? 0), 0);
+  const totalProcConsult = procConsultStats.rows.reduce((s, r) => s + (r.total ?? 0), 0);
   const totalProcAll = viewProcedureStats.rows.reduce((s, r) => s + (r.total ?? 0), 0);
   const totalProcWard = viewIpdWardProcStats.rows.reduce((s, r) => s + (r.total ?? 0), 0);
 
@@ -536,7 +547,7 @@ export default function DashboardPage() {
     );
   }
 
-  function renderProcPie(data: { name: string; value: number; pct: number }[], fsKey: "opdProc" | "erProc" | "ipdProc" | "procedure") {
+  function renderProcPie(data: { name: string; value: number; pct: number }[], fsKey: "opdProc" | "erProc" | "consultProc" | "ipdProc" | "procedure") {
     if (data.length === 0) return <p style={{ textAlign: "center", color: "var(--muted)", padding: 12 }}>ไม่มีข้อมูลหัตถการในช่วงนี้</p>;
     return (
       <div role="button" tabIndex={0} className="pie-click-expand"
@@ -584,6 +595,7 @@ export default function DashboardPage() {
     procedure: "🩺 สัดส่วนหัตถการทั้งหมด",
     opdProc: "🏥 สัดส่วนหัตถการ OPD",
     erProc: "🚑 สัดส่วนหัตถการ ER",
+    consultProc: "📞 สัดส่วนหัตถการ Consult นอกแผนก",
     ipdProc: `🛏️ สัดส่วนหัตถการ ${ipdWard1 || "IPD"}`,
   };
 
@@ -592,6 +604,7 @@ export default function DashboardPage() {
     procedure: procedurePieData,
     opdProc: procOpdPie,
     erProc: procErPie,
+    consultProc: procConsultPie,
     ipdProc: ipdWardProcPie,
   };
 
@@ -757,6 +770,7 @@ export default function DashboardPage() {
         <span className="dash-acc-icon">📞</span>
         <span className="dash-acc-title">Consult นอกแผนก</span>
         <span className="dash-acc-badge" style={{ background: "#0d9488" }}>{totals.consult.toLocaleString()} ราย</span>
+        {totalProcConsult > 0 && <span className="dash-acc-badge" style={{ background: "#7c3aed" }}>{totalProcConsult} หัตถการ</span>}
         <span className={`dash-acc-chevron${openSections.has("consult") ? " open" : ""}`}>&#9654;</span>
       </button>
       {openSections.has("consult") && (
@@ -779,6 +793,16 @@ export default function DashboardPage() {
               </div>
             </div>
             {group === "day" && <DayColorLegend />}
+          </div>
+          <div className="chart-card">
+            <h3 className="chart-title">หัตถการ Consult นอกแผนก ({totalProcConsult} ครั้ง) <span className="chart-range">{rangeText}</span></h3>
+            {procConsultChartRows.length > 0
+              ? renderBarChart(procConsultChartRows, "#0d9488", "หัตถการ Consult")
+              : <p style={{ textAlign: "center", color: "var(--muted)", padding: 20 }}>ยังไม่มีข้อมูลหัตถการ Consult นอกแผนก ในช่วงนี้</p>}
+            <button type="button" className="section-toggle-btn" onClick={() => setConsultProcPieOpen((v) => !v)}>
+              {consultProcPieOpen ? "▼ ซ่อนสัดส่วนหัตถการ" : "▶ ดูสัดส่วนหัตถการ Consult"}
+            </button>
+            {consultProcPieOpen && renderProcPie(procConsultPie, "consultProc")}
           </div>
         </div>
       )}
@@ -919,6 +943,7 @@ export default function DashboardPage() {
               {pieFullscreen === "procedure" && renderFullscreenPie(procedurePieData)}
               {pieFullscreen === "opdProc" && renderFullscreenPie(procOpdPie)}
               {pieFullscreen === "erProc" && renderFullscreenPie(procErPie)}
+              {pieFullscreen === "consultProc" && renderFullscreenPie(procConsultPie)}
               {pieFullscreen === "ipdProc" && renderFullscreenPie(ipdWardProcPie)}
             </div>
           </div>
