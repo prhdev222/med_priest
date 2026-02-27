@@ -102,6 +102,7 @@ export default function DataEntryPage() {
 
   // Chatbot D/C state
   const [chatStep, setChatStep] = useState<ChatStep>("select_hn");
+  const [chatHnInput, setChatHnInput] = useState("");
   const [chatSelectedHn, setChatSelectedHn] = useState("");
   const [chatSelectedAdmit, setChatSelectedAdmit] = useState("");
   const [chatDcDate, setChatDcDate] = useState(todayIso());
@@ -109,15 +110,22 @@ export default function DataEntryPage() {
   const [chatDcResult, setChatDcResult] = useState<{ ok: boolean; los?: number; error?: string } | null>(null);
   const [chatMode, setChatMode] = useState<"chat" | "form">("chat");
   const chatWard = activeSection === "dcMed1" ? "MED1" : activeSection === "dcMed2" ? "MED2" : "";
+  const isBlueWard = chatWard === "MED1";
   const chatQuote = useMemo(() => {
     const q = MED_DC_QUOTES[chatWard] || MED_DC_QUOTES.MED1;
     return q[Math.floor(Math.random() * q.length)];
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSection]);
   const chatWardCases = useMemo(() => openCases.filter((c) => c.ward === chatWard), [openCases, chatWard]);
+  const chatMatchedCase = useMemo(() => {
+    const q = chatHnInput.trim();
+    if (!q) return null;
+    return chatWardCases.find((c) => c.hn === q) || null;
+  }, [chatHnInput, chatWardCases]);
 
   function resetChat() {
     setChatStep("select_hn");
+    setChatHnInput("");
     setChatSelectedHn("");
     setChatSelectedAdmit("");
     setChatDcDate(todayIso());
@@ -737,7 +745,7 @@ export default function DataEntryPage() {
 
       {/* ══════════════════ Chatbot D/C MED1 / MED2 ══════════════════ */}
       {unlocked && (activeSection === "dcMed1" || activeSection === "dcMed2") && (
-        <div className="de-panel">
+        <div className={`de-panel ${isBlueWard ? "dc-theme-blue" : "dc-theme-green"}`}>
           <button type="button" className="de-back-btn" onClick={() => { setActiveSection(null); resetChat(); setMsg(""); }}>← กลับเมนูหลัก</button>
 
           {/* Header with avatar */}
@@ -758,30 +766,39 @@ export default function DataEntryPage() {
           {/* ─── Chat Mode ─── */}
           {chatMode === "chat" && (
             <div className="chat-dc-body">
-              {/* Step 1: Select HN */}
+              {/* Step 1: Type HN */}
               <div className="chat-bubble bot">
                 <Image src={`/${chatWard}head.png`} alt={chatWard} width={36} height={36} className="chat-bubble-avatar" />
                 <div className="chat-bubble-content">
-                  {chatWardCases.length === 0
-                    ? `ไม่มีผู้ป่วยรอ D/C ใน ${chatWard} ค่ะ 🎉`
-                    : `เลือก HN ของผู้ป่วย ${chatWard} ที่จะ D/C ค่ะ (${chatWardCases.length} ราย)`
-                  }
+                  พิมพ์ HN ของผู้ป่วยที่จะ D/C ค่ะ {chatWardCases.length > 0 ? `(มี ${chatWardCases.length} รายรอ D/C)` : ""}
                 </div>
               </div>
 
-              {chatStep === "select_hn" && chatWardCases.length > 0 && (
-                <div className="chat-hn-list">
-                  {chatWardCases.map((c) => (
-                    <button key={`${c.hn}-${c.admitDate}`} className="chat-hn-btn"
-                      onClick={() => { setChatSelectedHn(c.hn); setChatSelectedAdmit(c.admitDate); setChatStep("select_date"); }}>
-                      <strong>HN {c.hn}</strong>
-                      <span>Admit: {c.admitDate}</span>
+              {chatStep === "select_hn" && (
+                <div className="chat-hn-search">
+                  <input
+                    type="text" inputMode="numeric" placeholder="พิมพ์เลข HN..."
+                    value={chatHnInput} onChange={(e) => setChatHnInput(e.target.value)}
+                    className="chat-hn-input"
+                  />
+                  {chatHnInput.trim() && chatMatchedCase && (
+                    <button className="chat-hn-match" onClick={() => {
+                      setChatSelectedHn(chatMatchedCase.hn);
+                      setChatSelectedAdmit(chatMatchedCase.admitDate);
+                      setChatStep("select_date");
+                    }}>
+                      <strong>HN {chatMatchedCase.hn}</strong>
+                      <span>Admit {chatWard}: {chatMatchedCase.admitDate}</span>
+                      <span className="chat-hn-match-arrow">เลือก →</span>
                     </button>
-                  ))}
+                  )}
+                  {chatHnInput.trim() && !chatMatchedCase && (
+                    <p className="chat-hn-nomatch">ไม่พบ HN นี้ในรายชื่อรอ D/C ของ {chatWard}</p>
+                  )}
                 </div>
               )}
 
-              {/* Step 2: Select date */}
+              {/* Step 2: Select D/C date */}
               {(chatStep === "select_date" || chatStep === "confirm" || chatStep === "done") && (
                 <div className="chat-bubble user">
                   <div className="chat-bubble-content">HN {chatSelectedHn} (Admit: {chatSelectedAdmit})</div>
@@ -791,7 +808,7 @@ export default function DataEntryPage() {
               {(chatStep === "select_date" || chatStep === "confirm" || chatStep === "done") && (
                 <div className="chat-bubble bot">
                   <Image src={`/${chatWard}head.png`} alt={chatWard} width={36} height={36} className="chat-bubble-avatar" />
-                  <div className="chat-bubble-content">วัน D/C วันไหนคะ?</div>
+                  <div className="chat-bubble-content">D/C วันที่เท่าไหร่คะ?</div>
                 </div>
               )}
 
@@ -833,7 +850,7 @@ export default function DataEntryPage() {
                     <Image src={`/${chatWard}head.png`} alt={chatWard} width={36} height={36} className="chat-bubble-avatar" />
                     <div className="chat-bubble-content">
                       {chatDcResult.ok
-                        ? <>D/C HN {chatSelectedHn} สำเร็จแล้วค่ะ! 🎉{chatDcResult.los ? ` (LOS: ${chatDcResult.los} วัน)` : ""}<br />ขอบคุณที่กรอกข้อมูลนะคะ 💚</>
+                        ? <>D/C HN {chatSelectedHn} สำเร็จแล้วค่ะ! 🎉{chatDcResult.los ? ` (LOS: ${chatDcResult.los} วัน)` : ""}<br />ขอบคุณที่กรอกข้อมูลนะคะ {isBlueWard ? "💙" : "💚"}</>
                         : <>เกิดข้อผิดพลาด: {chatDcResult.error} 😢</>
                       }
                     </div>
@@ -872,7 +889,7 @@ export default function DataEntryPage() {
                   <div className="de-dc-list">
                     {chatWardCases.map((c) => (
                       <div key={`${c.hn}-${c.admitDate}`} className="de-dc-item">
-                        <button type="button" className="btn-sm" style={{ background: "#16a34a" }}
+                        <button type="button" className="btn-sm" style={{ background: isBlueWard ? "#2563eb" : "#16a34a" }}
                           onClick={async () => {
                             if (!confirm(`ยืนยัน D/C HN ${c.hn} วันที่ ${chatDcDate}?`)) return;
                             setChatLoading(true);

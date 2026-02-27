@@ -1253,6 +1253,85 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
 
 .chat-confirm-btn.no:hover { background: #e2e8f0; }
 
+/* HN Search Input */
+.chat-hn-search {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-left: 46px;
+  animation: chatBubbleFade 0.3s ease-out;
+}
+
+.chat-hn-input {
+  padding: 12px 16px;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  font-size: 1rem;
+  width: 100%;
+  transition: border-color 0.2s;
+}
+
+.chat-hn-input:focus { outline: none; }
+
+.chat-hn-match {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 14px 18px;
+  border: 2px solid #bbf7d0;
+  border-radius: 12px;
+  background: #fff;
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 0.92rem;
+  text-align: left;
+}
+
+.chat-hn-match:hover {
+  transform: translateX(4px);
+}
+
+.chat-hn-match strong { font-size: 1rem; }
+.chat-hn-match span { color: #6b7280; font-size: 0.84rem; }
+.chat-hn-match-arrow { margin-left: auto; font-weight: 600; font-size: 0.85rem; }
+
+.chat-hn-nomatch {
+  padding: 10px 0;
+  color: #ef4444;
+  font-size: 0.88rem;
+  margin: 0;
+}
+
+/* ─── D/C Theme: Blue (MED1) ─── */
+.dc-theme-blue .chat-dc-avatar { filter: drop-shadow(0 2px 8px rgba(37, 99, 235, 0.3)); }
+.dc-theme-blue .chat-dc-title { color: #1e40af; }
+.dc-theme-blue .chat-dc-quote { color: #3b82f6; }
+.dc-theme-blue .chat-dc-mode-toggle button.active { background: #2563eb; }
+.dc-theme-blue .chat-dc-mode-toggle button:not(.active):hover { background: #eff6ff; }
+.dc-theme-blue .chat-bubble.bot .chat-bubble-content { background: #eff6ff; color: #1e40af; }
+.dc-theme-blue .chat-hn-input:focus { border-color: #3b82f6; }
+.dc-theme-blue .chat-hn-match { border-color: #bfdbfe; }
+.dc-theme-blue .chat-hn-match:hover { border-color: #3b82f6; background: #eff6ff; }
+.dc-theme-blue .chat-hn-match strong { color: #1e40af; }
+.dc-theme-blue .chat-hn-match-arrow { color: #2563eb; }
+.dc-theme-blue .chat-date-input { border-color: #bfdbfe; }
+.dc-theme-blue .chat-date-input:focus { border-color: #3b82f6; }
+.dc-theme-blue .chat-send-btn { background: #2563eb; }
+.dc-theme-blue .chat-send-btn:hover { background: #1d4ed8; }
+.dc-theme-blue .chat-confirm-btn.yes { background: #2563eb; }
+.dc-theme-blue .chat-confirm-btn.yes:hover { background: #1d4ed8; }
+
+/* ─── D/C Theme: Green (MED2) ─── */
+.dc-theme-green .chat-dc-avatar { filter: drop-shadow(0 2px 8px rgba(34, 197, 94, 0.3)); }
+.dc-theme-green .chat-dc-title { color: #166534; }
+.dc-theme-green .chat-dc-quote { color: #16a34a; }
+.dc-theme-green .chat-hn-input:focus { border-color: #22c55e; }
+.dc-theme-green .chat-hn-match { border-color: #bbf7d0; }
+.dc-theme-green .chat-hn-match:hover { border-color: #22c55e; background: #f0fdf4; }
+.dc-theme-green .chat-hn-match strong { color: #166534; }
+.dc-theme-green .chat-hn-match-arrow { color: #16a34a; }
+
 .chat-confirm-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
