@@ -17,7 +17,8 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
-const REFRESH_MS = 5 * 60 * 1000;
+const AUTO_REFRESH_HOUR = 17;
+const AUTO_REFRESH_MIN = 30;
 const PIE_COLORS = ["#3b82f6", "#f59e0b", "#14b8a6", "#e11d48", "#8b5cf6", "#f97316", "#22c55e", "#ec4899", "#06b6d4", "#84cc16"];
 
 function todayIso() { return new Date().toISOString().slice(0, 10); }
@@ -42,9 +43,11 @@ export default function MonitorWard() {
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [ipdRows, setIpdRows] = useState<IpdByWardRow[]>([]);
   const [procStats, setProcStats] = useState<ProcedureStatsResponse>({ rows: [], byProcedure: [] });
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [clock, setClock] = useState(new Date());
   const mountRef = useRef(true);
+  const eveningDoneRef = useRef("");
 
   const from = startOfMonthIso();
   const to = todayIso();
@@ -52,6 +55,7 @@ export default function MonitorWard() {
 
   const fetchAll = useCallback(async () => {
     if (!wardName) return;
+    setRefreshing(true);
     try {
       const [s, ipd, p] = await Promise.all([
         getStats(from, to, group),
@@ -64,19 +68,28 @@ export default function MonitorWard() {
       setProcStats({ rows: p?.rows ?? [], byProcedure: p?.byProcedure ?? [] });
       setLastUpdate(new Date());
     } catch { /* silent */ }
+    finally { if (mountRef.current) setRefreshing(false); }
   }, [from, to, wardName]);
 
   useEffect(() => {
     mountRef.current = true;
     fetchAll();
-    const iv = setInterval(fetchAll, REFRESH_MS);
-    return () => { mountRef.current = false; clearInterval(iv); };
+    return () => { mountRef.current = false; };
   }, [fetchAll]);
 
   useEffect(() => {
-    const iv = setInterval(() => setClock(new Date()), 30_000);
+    const iv = setInterval(() => {
+      setClock(new Date());
+      const now = new Date();
+      const h = now.getHours(), m = now.getMinutes();
+      const todayKey = todayIso();
+      if (h === AUTO_REFRESH_HOUR && m >= AUTO_REFRESH_MIN && m < AUTO_REFRESH_MIN + 10 && eveningDoneRef.current !== todayKey) {
+        eveningDoneRef.current = todayKey;
+        fetchAll();
+      }
+    }, 60_000);
     return () => clearInterval(iv);
-  }, []);
+  }, [fetchAll]);
 
   const avgLos = stats?.avgLosDays ?? 0;
 
@@ -125,6 +138,9 @@ export default function MonitorWard() {
           <h1 className="monitor-title">Ward {wardName} — อายุรกรรม รพ.สงฆ์</h1>
         </div>
         <div className="monitor-topbar-right">
+          <button className="monitor-refresh-btn" onClick={fetchAll} disabled={refreshing} title="รีเฟรชข้อมูล">
+            <span className={refreshing ? "monitor-spin" : ""}>&#x21bb;</span> {refreshing ? "กำลังโหลด..." : "Refresh"}
+          </button>
           <span className="monitor-clock">{fmtTime(clock)}</span>
           <span className="monitor-date">{todayIso()}</span>
           <button className="monitor-fs-btn" onClick={toggleFullscreen} title="เต็มจอ">⛶</button>
@@ -233,8 +249,8 @@ export default function MonitorWard() {
       </div>
 
       <div className="monitor-footer">
-        <span>อัพเดตล่าสุด: {fmtTime(lastUpdate)}</span>
-        <span>Auto-refresh ทุก 5 นาที</span>
+        <span>อัพเดตล่าสุด: {lastUpdate ? fmtTime(lastUpdate) : "—"}</span>
+        <span>Auto-refresh ทุกวัน 17:30</span>
         <a href="/monitor" className="monitor-back-link">← เลือก Dashboard</a>
       </div>
     </div>

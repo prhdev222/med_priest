@@ -1847,6 +1847,45 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
   color: #94a3b8;
 }
 
+.monitor-refresh-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 1rem;
+  font-weight: 600;
+  background: #2563eb;
+  border: none;
+  color: #fff;
+  padding: 8px 18px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.1s;
+}
+
+.monitor-refresh-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+  transform: scale(1.03);
+}
+
+.monitor-refresh-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.monitor-refresh-btn span {
+  font-size: 1.2rem;
+  display: inline-block;
+}
+
+@keyframes monitor-spin-anim {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.monitor-spin {
+  animation: monitor-spin-anim 0.8s linear infinite;
+}
+
 .monitor-fs-btn {
   font-size: 1.4rem;
   background: #334155;
