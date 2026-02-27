@@ -335,7 +335,7 @@ export default function DataEntryPage() {
           {(["MED1", "MED2"] as const).map((ward) => {
             const cnt = openCases.filter((c) => c.ward === ward).length;
             return (
-              <button key={ward} className="de-ward-dc-card" onClick={() => { resetChat(); setActiveSection(ward === "MED1" ? "dcMed1" : "dcMed2"); }}>
+              <button key={ward} className={`de-ward-dc-card ${ward === "MED1" ? "dc-card-blue" : "dc-card-green"}`} onClick={() => { resetChat(); setActiveSection(ward === "MED1" ? "dcMed1" : "dcMed2"); }}>
                 <div className="de-ward-dc-top">
                   <div className="de-ward-dc-text">
                     <span className="de-ward-dc-name">D/C ผู้ป่วย {ward}</span>
