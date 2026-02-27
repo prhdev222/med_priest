@@ -515,12 +515,125 @@ export default function DashboardPage() {
 
   function exportCsv() {
     const bom = "\uFEFF";
-    const noteRow = hasNoData ? "หมายเหตุ: ไม่มีข้อมูลในช่วงวันที่เลือก\n" : "";
-    const header = "วันที่,OPD,ER,Consult,IPD Admit,IPD D/C\n";
-    const rows = chartRows.map((r) => `${r.key},${r.opd},${r.er},${r.consult},${r.ipdAdmit},${r.ipdDischarge}`).join("\n");
+    const sep = "\n";
+    const section = (title: string) => `${sep}${"═".repeat(60)}${sep}${title}${sep}${"═".repeat(60)}${sep}`;
     const totalAo = chartRows.reduce((s, r) => s + (r.ipdAo ?? 0), 0);
-    const summary = `\n\nสรุป ${from} ถึง ${to}\nOPD รวม,${totals.opd}\nER รวม,${totals.er}\nConsult รวม,${totals.consult}\nIPD Admit รวม,${totals.ipdAdmit}\nIPD D/C รวม,${totals.ipdDischarge}\nIPD A/O รวม,${totalAo}\nAvg LOS,${viewLos.toFixed(1)} วัน\nหัตถการ OPD,${totalProcOpd}\nหัตถการ ER,${totalProcEr}\nหัตถการ รวม,${totalProcAll}`;
-    const blob = new Blob([bom + noteRow + header + rows + summary], { type: "text/csv;charset=utf-8;" });
+
+    const parts: string[] = [];
+
+    parts.push(`Dashboard อายุรกรรม รพ.สงฆ์ — Export ${new Date().toLocaleString("th-TH")}${sep}`);
+    parts.push(`ช่วงข้อมูล: ${from} ถึง ${to} (แสดงแบบ: ${group === "day" ? "รายวัน" : group === "week" ? "รายสัปดาห์" : group === "month" ? "รายเดือน" : "รายปี"})${sep}`);
+    if (hasNoData) parts.push(`หมายเหตุ: ไม่มีข้อมูลในช่วงวันที่เลือก${sep}`);
+
+    // 1) Summary
+    parts.push(section("สรุปภาพรวม"));
+    parts.push(`รายการ,จำนวน,หน่วย${sep}`);
+    parts.push(`OPD ผู้ป่วยนอก,${totals.opd},ราย${sep}`);
+    parts.push(`ER ผู้ป่วยนอก,${totals.er},ราย${sep}`);
+    parts.push(`Consult นอกแผนก,${totals.consult},ราย${sep}`);
+    parts.push(`IPD Admit,${totals.ipdAdmit},ราย${sep}`);
+    parts.push(`IPD D/C,${totals.ipdDischarge},ราย${sep}`);
+    parts.push(`IPD A/O,${totalAo},ราย${sep}`);
+    parts.push(`Avg LOS,${viewLos.toFixed(1)},วัน${sep}`);
+    parts.push(`หัตถการ OPD,${totalProcOpd},ครั้ง${sep}`);
+    parts.push(`หัตถการ ER,${totalProcEr},ครั้ง${sep}`);
+    parts.push(`หัตถการ Consult,${totalProcConsult},ครั้ง${sep}`);
+    parts.push(`หัตถการ ทั้งหมด,${totalProcAll},ครั้ง${sep}`);
+
+    // 2) Stats per period
+    parts.push(section("สถิติรายวัน/ช่วง — OPD / ER / Consult / IPD"));
+    parts.push(`วันที่,OPD,ER,Consult,IPD Admit,IPD D/C,IPD A/O${sep}`);
+    for (const r of chartRows) {
+      parts.push(`${r.key},${r.opd},${r.er},${r.consult},${r.ipdAdmit},${r.ipdDischarge},${r.ipdAo}${sep}`);
+    }
+
+    // 3) IPD by Ward
+    const ipdSrc = useMock ? mockIpdByWardRows : ipdByWardData.rows;
+    if (ipdSrc.length > 0) {
+      const wards = Array.from(new Set(ipdSrc.map((r) => r.ward))).sort();
+      parts.push(section("IPD แยกตาม Ward"));
+      parts.push(`วันที่,Ward,Admit,D/C,A/O${sep}`);
+      for (const r of ipdSrc) {
+        parts.push(`${r.key},${r.ward},${r.admit},${r.discharge},${(r as { ao?: number }).ao ?? 0}${sep}`);
+      }
+
+      parts.push(`${sep}สรุป IPD ตาม Ward${sep}`);
+      parts.push(`Ward,Admit รวม,D/C รวม${sep}`);
+      for (const ws of viewWardStats) {
+        parts.push(`${ws.ward},${ws.admit},${ws.discharge}${sep}`);
+      }
+    }
+
+    // 4) Procedure OPD
+    if (viewProcOpdStats.byProcedure.length > 0) {
+      parts.push(section("หัตถการ OPD"));
+      parts.push(`หัตถการ,จำนวน (ครั้ง),สัดส่วน (%)${sep}`);
+      const pie = procOpdPie;
+      for (const p of pie) {
+        parts.push(`"${p.name}",${p.value},${p.pct}%${sep}`);
+      }
+      if (procOpdChartRows.length > 0) {
+        parts.push(`${sep}หัตถการ OPD ตามช่วง${sep}`);
+        parts.push(`วันที่,จำนวน (ครั้ง)${sep}`);
+        for (const r of procOpdChartRows) parts.push(`${r.key},${r.total}${sep}`);
+      }
+    }
+
+    // 5) Procedure ER
+    if (viewProcErStats.byProcedure.length > 0) {
+      parts.push(section("หัตถการ ER"));
+      parts.push(`หัตถการ,จำนวน (ครั้ง),สัดส่วน (%)${sep}`);
+      const pie = procErPie;
+      for (const p of pie) {
+        parts.push(`"${p.name}",${p.value},${p.pct}%${sep}`);
+      }
+      if (procErChartRows.length > 0) {
+        parts.push(`${sep}หัตถการ ER ตามช่วง${sep}`);
+        parts.push(`วันที่,จำนวน (ครั้ง)${sep}`);
+        for (const r of procErChartRows) parts.push(`${r.key},${r.total}${sep}`);
+      }
+    }
+
+    // 6) Procedure Consult
+    if (procConsultStats.byProcedure.length > 0) {
+      parts.push(section("หัตถการ Consult นอกแผนก"));
+      parts.push(`หัตถการ,จำนวน (ครั้ง),สัดส่วน (%)${sep}`);
+      const pie = procConsultPie;
+      for (const p of pie) {
+        parts.push(`"${p.name}",${p.value},${p.pct}%${sep}`);
+      }
+      if (procConsultChartRows.length > 0) {
+        parts.push(`${sep}หัตถการ Consult ตามช่วง${sep}`);
+        parts.push(`วันที่,จำนวน (ครั้ง)${sep}`);
+        for (const r of procConsultChartRows) parts.push(`${r.key},${r.total}${sep}`);
+      }
+    }
+
+    // 7) Procedure All
+    if (viewProcedureStats.byProcedure.length > 0) {
+      parts.push(section("หัตถการทั้งหมด (รวมทุก Ward)"));
+      parts.push(`หัตถการ,จำนวน (ครั้ง),สัดส่วน (%)${sep}`);
+      const pie = procedurePieData;
+      for (const p of pie) {
+        parts.push(`"${p.name}",${p.value},${p.pct}%${sep}`);
+      }
+      if (procedureChartRows.length > 0) {
+        parts.push(`${sep}หัตถการรวม ตามช่วง${sep}`);
+        parts.push(`วันที่,จำนวน (ครั้ง)${sep}`);
+        for (const r of procedureChartRows) parts.push(`${r.key},${r.total}${sep}`);
+      }
+    }
+
+    // 8) IPD Ward procedure (if selected)
+    if (ipdWard1 && ipdWard1 !== "ทั้งหมด" && viewIpdWardProcStats.byProcedure.length > 0) {
+      parts.push(section(`หัตถการ Ward: ${ipdWard1}`));
+      parts.push(`หัตถการ,จำนวน (ครั้ง),สัดส่วน (%)${sep}`);
+      for (const p of ipdWardProcPie) {
+        parts.push(`"${p.name}",${p.value},${p.pct}%${sep}`);
+      }
+    }
+
+    const blob = new Blob([bom + parts.join("")], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = `MedPriest_Dashboard_${from}_${to}.csv`; a.click();
