@@ -663,7 +663,7 @@ export default function AdminPage() {
         <div className="admin-panel">
           <div className="admin-card">
             <h2 className="admin-card-title">📑 ลิงก์ Google Sheets จัดการข้อมูล</h2>
-            <p style={{ color: "var(--muted)", marginBottom: 16 }}>กดที่การ์ดเพื่อเปิด Google Sheet ในแท็บใหม่</p>
+            <p style={{ color: "var(--muted)", marginBottom: 16 }}>กดที่การ์ดเพื่อเปิด Google Sheet ในแท็บใหม่ — สามารถแก้ไขข้อมูลได้ถ้าเปิดด้วย Email ที่ได้รับสิทธิ์เป็น Editor</p>
             <div className="admin-sheets-grid">
               {GOOGLE_SHEETS.map((s) => (
                 <a key={s.url} href={s.url} target="_blank" rel="noopener noreferrer" className="admin-sheet-card">
