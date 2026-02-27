@@ -275,6 +275,8 @@ export default function DashboardPage() {
   const [procErStats, setProcErStats] = useState<ProcedureStatsResponse>({ rows: [], byProcedure: [] });
   const [ipdWardProcStats, setIpdWardProcStats] = useState<ProcedureStatsResponse>({ rows: [], byProcedure: [] });
   const [procedurePieOpen, setProcedurePieOpen] = useState(false);
+  const [opdProcPieOpen, setOpdProcPieOpen] = useState(false);
+  const [erProcPieOpen, setErProcPieOpen] = useState(false);
   const [ipdProcPieOpen, setIpdProcPieOpen] = useState(false);
   const [pieFullscreen, setPieFullscreen] = useState<"ward" | "procedure" | "opdProc" | "erProc" | "ipdProc" | null>(null);
   const [openSections, setOpenSections] = useState<Set<string>>(new Set());
@@ -695,18 +697,16 @@ export default function DashboardPage() {
             </div>
             {group === "day" && <DayColorLegend />}
           </div>
-          {procOpdChartRows.length > 0 && (
-            <div className="chart-card">
-              <h3 className="chart-title">หัตถการ OPD ({totalProcOpd} ครั้ง) <span className="chart-range">{rangeText}</span></h3>
-              {renderBarChart(procOpdChartRows, "#2563eb", "หัตถการ OPD")}
-            </div>
-          )}
-          {procOpdPie.length > 0 && (
-            <div className="chart-card">
-              <h3 className="chart-title">สัดส่วนหัตถการ OPD <span className="chart-range">{rangeText}</span></h3>
-              {renderProcPie(procOpdPie, "opdProc")}
-            </div>
-          )}
+          <div className="chart-card">
+            <h3 className="chart-title">หัตถการ OPD ({totalProcOpd} ครั้ง) <span className="chart-range">{rangeText}</span></h3>
+            {procOpdChartRows.length > 0
+              ? renderBarChart(procOpdChartRows, "#2563eb", "หัตถการ OPD")
+              : <p style={{ textAlign: "center", color: "var(--muted)", padding: 20 }}>ยังไม่มีข้อมูลหัตถการ OPD ในช่วงนี้</p>}
+            <button type="button" className="section-toggle-btn" onClick={() => setOpdProcPieOpen((v) => !v)}>
+              {opdProcPieOpen ? "▼ ซ่อนสัดส่วนหัตถการ" : "▶ ดูสัดส่วนหัตถการ OPD"}
+            </button>
+            {opdProcPieOpen && renderProcPie(procOpdPie, "opdProc")}
+          </div>
         </div>
       )}
 
@@ -739,18 +739,16 @@ export default function DashboardPage() {
             </div>
             {group === "day" && <DayColorLegend />}
           </div>
-          {procErChartRows.length > 0 && (
-            <div className="chart-card">
-              <h3 className="chart-title">หัตถการ ER ({totalProcEr} ครั้ง) <span className="chart-range">{rangeText}</span></h3>
-              {renderBarChart(procErChartRows, "#f97316", "หัตถการ ER")}
-            </div>
-          )}
-          {procErPie.length > 0 && (
-            <div className="chart-card">
-              <h3 className="chart-title">สัดส่วนหัตถการ ER <span className="chart-range">{rangeText}</span></h3>
-              {renderProcPie(procErPie, "erProc")}
-            </div>
-          )}
+          <div className="chart-card">
+            <h3 className="chart-title">หัตถการ ER ({totalProcEr} ครั้ง) <span className="chart-range">{rangeText}</span></h3>
+            {procErChartRows.length > 0
+              ? renderBarChart(procErChartRows, "#f97316", "หัตถการ ER")
+              : <p style={{ textAlign: "center", color: "var(--muted)", padding: 20 }}>ยังไม่มีข้อมูลหัตถการ ER ในช่วงนี้</p>}
+            <button type="button" className="section-toggle-btn" onClick={() => setErProcPieOpen((v) => !v)}>
+              {erProcPieOpen ? "▼ ซ่อนสัดส่วนหัตถการ" : "▶ ดูสัดส่วนหัตถการ ER"}
+            </button>
+            {erProcPieOpen && renderProcPie(procErPie, "erProc")}
+          </div>
         </div>
       )}
 
