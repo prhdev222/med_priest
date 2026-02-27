@@ -936,8 +936,8 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
     gap: 16px;
   }
   .de-nurse-img {
-    width: 80px !important;
-    height: 80px !important;
+    width: 100px !important;
+    height: 100px !important;
   }
   .de-nurse-quote {
     font-size: 1rem;

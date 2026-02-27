@@ -298,7 +298,7 @@ export default function DataEntryPage() {
       {/* ── Nurse Encouragement ── */}
       {!unlocked && (
         <div className="de-nurse-hero">
-          <Image src="/NurseHeart.png" alt="Nurse Heart" width={100} height={100} className="de-nurse-img" priority />
+          <Image src="/NurseHeart.png" alt="Nurse Heart" width={140} height={140} className="de-nurse-img" priority />
           <div className="de-nurse-text">
             <p className="de-nurse-quote">&ldquo;{nurseQuote}&rdquo;</p>
             <p className="de-nurse-sub">อายุรกรรม รพ.สงฆ์ — ขอบคุณที่ตั้งใจกรอกข้อมูลทุกวัน</p>
