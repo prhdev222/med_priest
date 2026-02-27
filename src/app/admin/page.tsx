@@ -20,7 +20,7 @@ import {
 } from "@/lib/api";
 import LoadingOverlay from "@/components/LoadingOverlay";
 
-type Tab = "patients" | "activities" | "encouragement";
+type Tab = "patients" | "activities" | "encouragement" | "sheets";
 const wards = ["MED1", "MED2", "IMC", "Palliative", "ward90", "ICU"];
 
 export default function AdminPage() {
@@ -227,10 +227,17 @@ export default function AdminPage() {
     catch (err) { setError((err as Error).message); setLoading(false); }
   }
 
+  const GOOGLE_SHEETS = [
+    { name: "คิวรับ Case กลางแพทย์", url: "https://docs.google.com/spreadsheets/d/1LcJGzolGv48rSIal-w8SHM5EteQQqwugRquKuna-_Sw/edit?usp=sharing", icon: "📊", desc: "ตารางคิวรับเคสกลางแพทย์อายุรกรรม" },
+    { name: "ตารางเวร MED", url: "https://docs.google.com/spreadsheets/d/11pnUQklnGRHtdY32bUdP-2Lyed1XbgJ8prnQ3TTGUNE/edit?usp=sharing", icon: "📅", desc: "ระบบถามเวรแพทย์อายุรกรรม" },
+    { name: "ตาราง OPD แพทย์", url: "https://docs.google.com/spreadsheets/d/1nCzz1nyTsMr4HmI8vhLwC0X-Pv3X0Y86eB84TkoSWD0/edit?usp=sharing", icon: "🩺", desc: "ตารางออกตรวจ OPD แพทย์อายุรกรรม" },
+  ];
+
   const tabs: { key: Tab; label: string; icon: string; desc: string; count: number }[] = [
     { key: "patients", label: "ข้อมูลผู้ป่วย", icon: "🏥", desc: "ค้นหาตามวันที่ / จัดการ HN", count: ipdOpen.length },
     { key: "activities", label: "กิจกรรม", icon: "📋", desc: "จัดการหน้ากิจกรรม", count: activities.length },
     { key: "encouragement", label: "ให้กำลังใจ", icon: "💬", desc: "จัดการหน้าบอร์ดให้กำลังใจ", count: encouragement.length },
+    { key: "sheets", label: "Google Sheets", icon: "📑", desc: "ลิงก์จัดการข้อมูลภายนอก", count: GOOGLE_SHEETS.length },
   ];
 
   if (!unlocked) {
@@ -648,6 +655,27 @@ export default function AdminPage() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* ═══ Tab: Google Sheets ═══ */}
+      {tab === "sheets" && (
+        <div className="admin-panel">
+          <div className="admin-card">
+            <h2 className="admin-card-title">📑 ลิงก์ Google Sheets จัดการข้อมูล</h2>
+            <p style={{ color: "var(--muted)", marginBottom: 16 }}>กดที่การ์ดเพื่อเปิด Google Sheet ในแท็บใหม่</p>
+            <div className="admin-sheets-grid">
+              {GOOGLE_SHEETS.map((s) => (
+                <a key={s.url} href={s.url} target="_blank" rel="noopener noreferrer" className="admin-sheet-card">
+                  <span className="admin-sheet-icon">{s.icon}</span>
+                  <div className="admin-sheet-text">
+                    <span className="admin-sheet-name">{s.name}</span>
+                    <span className="admin-sheet-desc">{s.desc}</span>
+                  </div>
+                  <span className="admin-sheet-arrow">↗</span>
+                </a>
+              ))}
+            </div>
           </div>
         </div>
       )}

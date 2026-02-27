@@ -1895,6 +1895,63 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
 .btn-delete { background: var(--danger) !important; color: #fff !important; }
 .btn-delete:hover { background: #b91c1c !important; }
 
+/* ─── Admin Google Sheets ─── */
+.admin-sheets-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.admin-sheet-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 18px 20px;
+  background: linear-gradient(135deg, #f0f9ff 0%, #eff6ff 50%, #f0fdf4 100%);
+  border: 2px solid #bfdbfe;
+  border-radius: 14px;
+  text-decoration: none;
+  transition: all 0.2s;
+  cursor: pointer;
+}
+
+.admin-sheet-card:hover {
+  border-color: #3b82f6;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
+  transform: translateY(-2px);
+}
+
+.admin-sheet-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.admin-sheet-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+.admin-sheet-name {
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e40af;
+}
+
+.admin-sheet-desc {
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.admin-sheet-arrow {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #3b82f6;
+  flex-shrink: 0;
+}
+
 /* ─── Admin IPD Open: Collapsible + Date Groups ─── */
 .ipd-open-header {
   display: flex;
