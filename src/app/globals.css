@@ -1332,6 +1332,72 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
 .dc-theme-green .chat-hn-match strong { color: #166534; }
 .dc-theme-green .chat-hn-match-arrow { color: #16a34a; }
 
+/* ─── D/C Theme: Pink (NurseHeart Daily) ─── */
+.dc-theme-pink .chat-dc-avatar { filter: drop-shadow(0 2px 8px rgba(236, 72, 153, 0.3)); }
+.dc-theme-pink .chat-dc-title { color: #9d174d; }
+.dc-theme-pink .chat-dc-quote { color: #ec4899; }
+.dc-theme-pink .chat-dc-mode-toggle button.active { background: #ec4899; }
+.dc-theme-pink .chat-dc-mode-toggle button:not(.active):hover { background: #fdf2f8; }
+.dc-theme-pink .chat-bubble.bot .chat-bubble-content { background: #fdf2f8; color: #9d174d; }
+.dc-theme-pink .chat-bubble.user .chat-bubble-content { background: #ec4899; }
+.dc-theme-pink .chat-date-input { border-color: #fbcfe8; }
+.dc-theme-pink .chat-date-input:focus { border-color: #ec4899; outline: none; }
+.dc-theme-pink .chat-send-btn { background: #ec4899; }
+.dc-theme-pink .chat-send-btn:hover { background: #db2777; }
+.dc-theme-pink .chat-confirm-btn.yes { background: #ec4899; }
+.dc-theme-pink .chat-confirm-btn.yes:hover { background: #db2777; }
+.dc-theme-pink select { border-color: #fbcfe8; }
+.dc-theme-pink select:focus { border-color: #ec4899; outline: none; }
+
+/* Daily Chatbot Button */
+.de-daily-chat-btn {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  background: linear-gradient(135deg, #fdf2f8 0%, #fce7f3 50%, #fff1f2 100%);
+  border: 2px solid #f9a8d4;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: left;
+}
+
+.de-daily-chat-btn:hover {
+  border-color: #ec4899;
+  box-shadow: 0 4px 20px rgba(236, 72, 153, 0.18);
+  transform: translateY(-2px);
+}
+
+.de-daily-chat-img {
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  filter: drop-shadow(0 2px 8px rgba(236, 72, 153, 0.3));
+}
+
+.de-daily-chat-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+}
+
+.de-daily-chat-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #9d174d;
+}
+
+.de-daily-chat-desc {
+  font-size: 0.82rem;
+  color: #ec4899;
+  font-weight: 500;
+}
+
 .chat-confirm-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;

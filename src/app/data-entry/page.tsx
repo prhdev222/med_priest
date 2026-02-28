@@ -24,7 +24,17 @@ const NURSE_QUOTES = [
   "ทุกครั้งที่กรอก คือการสร้างอนาคตที่ดีกว่าให้แผนกเรา 📊",
 ];
 
-type Section = "opd" | "admit" | "ao" | "dc" | "proc" | "today" | "dcMed1" | "dcMed2" | null;
+type Section = "opd" | "admit" | "ao" | "dc" | "proc" | "today" | "dcMed1" | "dcMed2" | "dailyChat" | null;
+
+type DailyStep =
+  | "date" | "opd" | "er" | "consult"
+  | "ask_admit" | "admit_hn" | "admit_ward" | "admit_more"
+  | "ask_ao" | "ao_ward" | "ao_count"
+  | "ask_proc" | "proc_type" | "proc_ward" | "proc_count" | "proc_more"
+  | "summary" | "saving" | "done";
+
+interface DailyAdmitItem { hn: string; ward: string }
+interface DailyProcItem { key: string; label: string; ward: string; count: number }
 
 const MED_DC_QUOTES: Record<string, string[]> = {
   MED1: [
@@ -122,6 +132,54 @@ export default function DataEntryPage() {
     if (!q) return null;
     return chatWardCases.find((c) => c.hn === q) || null;
   }, [chatHnInput, chatWardCases]);
+
+  // Daily Chatbot state
+  const [dStep, setDStep] = useState<DailyStep>("date");
+  const [dDate, setDDate] = useState(todayIso());
+  const [dOpd, setDOpd] = useState(0);
+  const [dEr, setDEr] = useState(0);
+  const [dConsult, setDConsult] = useState(0);
+  const [dAdmits, setDAdmits] = useState<DailyAdmitItem[]>([]);
+  const [dTmpHn, setDTmpHn] = useState("");
+  const [dTmpWard, setDTmpWard] = useState("MED1");
+  const [dAoWard, setDAoWard] = useState("MED1");
+  const [dAoCount, setDAoCount] = useState(0);
+  const [dProcs, setDProcs] = useState<DailyProcItem[]>([]);
+  const [dTmpProcKey, setDTmpProcKey] = useState("");
+  const [dTmpProcWard, setDTmpProcWard] = useState("OPD");
+  const [dTmpProcCount, setDTmpProcCount] = useState(1);
+  const [dSaving, setDSaving] = useState(false);
+  const [dDone, setDDone] = useState(false);
+  const [dError, setDError] = useState("");
+
+  function resetDaily() {
+    setDStep("date"); setDDate(todayIso()); setDOpd(0); setDEr(0); setDConsult(0);
+    setDAdmits([]); setDTmpHn(""); setDTmpWard("MED1");
+    setDAoWard("MED1"); setDAoCount(0);
+    setDProcs([]); setDTmpProcKey(""); setDTmpProcWard("OPD"); setDTmpProcCount(1);
+    setDSaving(false); setDDone(false); setDError("");
+  }
+
+  async function dailySave() {
+    setDStep("saving"); setDSaving(true); setDError("");
+    try {
+      if (dOpd > 0) await addStatsRow({ code, sheetName: "OPD", date: dDate, count: dOpd });
+      if (dEr > 0) await addStatsRow({ code, sheetName: "ER", date: dDate, count: dEr });
+      if (dConsult > 0) await addStatsRow({ code, sheetName: "Consult", date: dDate, count: dConsult });
+      for (const a of dAdmits) {
+        await addIpdAdmit({ code, hn: a.hn, ward: a.ward, admitDate: dDate, stayType: "admit" });
+      }
+      if (dAoCount > 0) {
+        await addIpdAdmit({ code, stayType: "ao", ward: dAoWard, admitDate: dDate, count: dAoCount });
+      }
+      for (const p of dProcs) {
+        await addProcedure({ code, date: dDate, procedureKey: p.key, procedureLabel: p.key === "other" ? p.label : undefined, count: p.count, ward: p.ward });
+      }
+      await Promise.all([loadOpenCases(code), loadToday(code)]);
+      setDStep("done"); setDDone(true);
+    } catch (err) { setDError((err as Error).message); setDStep("summary"); }
+    finally { setDSaving(false); }
+  }
 
   function resetChat() {
     setChatStep("select_hn");
@@ -338,6 +396,16 @@ export default function DataEntryPage() {
       )}
 
       {unlocked && activeSection === null && (<>
+        {/* Daily Chatbot Button */}
+        <button className="de-daily-chat-btn" onClick={() => { resetDaily(); setActiveSection("dailyChat"); }}>
+          <Image src="/NurseHeart.png" alt="NurseHeart" width={64} height={64} className="de-daily-chat-img" />
+          <div className="de-daily-chat-text">
+            <span className="de-daily-chat-title">กรอกข้อมูลวันนี้ (Chatbot)</span>
+            <span className="de-daily-chat-desc">NurseHeart จะถามทีละข้อ — OPD, ER, Consult, Admit, A/O, หัตถการ</span>
+          </div>
+          <span className="de-menu-arrow">›</span>
+        </button>
+
         {/* Quick D/C MED1 & MED2 */}
         <div className="de-ward-dc-row">
           {(["MED1", "MED2"] as const).map((ward) => {
@@ -740,6 +808,286 @@ export default function DataEntryPage() {
           {todayTotalCount === 0 && (
             <p style={{ color: "var(--muted)", textAlign: "center", padding: 24 }}>ยังไม่มีข้อมูลที่กรอกวันนี้</p>
           )}
+        </div>
+      )}
+
+      {/* ══════════════════ Daily Chatbot (NurseHeart) ══════════════════ */}
+      {unlocked && activeSection === "dailyChat" && (
+        <div className="de-panel dc-theme-pink">
+          <button type="button" className="de-back-btn" onClick={() => { setActiveSection(null); resetDaily(); setMsg(""); }}>← กลับเมนูหลัก</button>
+
+          <div className="chat-dc-header">
+            <Image src="/NurseHeart.png" alt="NurseHeart" width={56} height={56} className="chat-dc-avatar" />
+            <div>
+              <h2 className="chat-dc-title">กรอกข้อมูลประจำวัน</h2>
+              <p className="chat-dc-quote">NurseHeart จะถามทีละข้อนะคะ สู้ๆ!</p>
+            </div>
+          </div>
+
+          <div className="chat-dc-body">
+            {/* ── Step: Date ── */}
+            <div className="chat-bubble bot">
+              <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+              <div className="chat-bubble-content">วันที่กรอกข้อมูลวันไหนคะ?</div>
+            </div>
+            {dStep === "date" && (
+              <div className="chat-input-row">
+                <input type="date" value={dDate} onChange={(e) => setDDate(e.target.value)} className="chat-date-input" />
+                <button type="button" className="chat-send-btn" onClick={() => setDStep("opd")}>ถัดไป →</button>
+              </div>
+            )}
+
+            {/* ── After date confirmed ── */}
+            {dStep !== "date" && (
+              <div className="chat-bubble user"><div className="chat-bubble-content">📅 {dDate}</div></div>
+            )}
+
+            {/* ── Step: OPD ── */}
+            {dStep !== "date" && (
+              <div className="chat-bubble bot">
+                <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                <div className="chat-bubble-content">🏥 จำนวน OPD วันนี้กี่รายคะ?</div>
+              </div>
+            )}
+            {dStep === "opd" && (
+              <div className="chat-input-row">
+                <input type="number" min={0} value={dOpd} onChange={(e) => setDOpd(Number(e.target.value))} className="chat-date-input" placeholder="จำนวน OPD" />
+                <button type="button" className="chat-send-btn" onClick={() => setDStep("er")}>ถัดไป →</button>
+              </div>
+            )}
+            {["er","consult","ask_admit","admit_hn","admit_ward","admit_more","ask_ao","ao_ward","ao_count","ask_proc","proc_type","proc_ward","proc_count","proc_more","summary","saving","done"].includes(dStep) && (
+              <div className="chat-bubble user"><div className="chat-bubble-content">OPD: {dOpd} ราย</div></div>
+            )}
+
+            {/* ── Step: ER ── */}
+            {["er","consult","ask_admit","admit_hn","admit_ward","admit_more","ask_ao","ao_ward","ao_count","ask_proc","proc_type","proc_ward","proc_count","proc_more","summary","saving","done"].includes(dStep) && (
+              <div className="chat-bubble bot">
+                <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                <div className="chat-bubble-content">🚑 จำนวน ER ผู้ป่วยนอกกี่รายคะ?</div>
+              </div>
+            )}
+            {dStep === "er" && (
+              <div className="chat-input-row">
+                <input type="number" min={0} value={dEr} onChange={(e) => setDEr(Number(e.target.value))} className="chat-date-input" placeholder="จำนวน ER" />
+                <button type="button" className="chat-send-btn" onClick={() => setDStep("consult")}>ถัดไป →</button>
+              </div>
+            )}
+            {["consult","ask_admit","admit_hn","admit_ward","admit_more","ask_ao","ao_ward","ao_count","ask_proc","proc_type","proc_ward","proc_count","proc_more","summary","saving","done"].includes(dStep) && (
+              <div className="chat-bubble user"><div className="chat-bubble-content">ER: {dEr} ราย</div></div>
+            )}
+
+            {/* ── Step: Consult ── */}
+            {["consult","ask_admit","admit_hn","admit_ward","admit_more","ask_ao","ao_ward","ao_count","ask_proc","proc_type","proc_ward","proc_count","proc_more","summary","saving","done"].includes(dStep) && (
+              <div className="chat-bubble bot">
+                <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                <div className="chat-bubble-content">📋 จำนวน Consult กี่รายคะ?</div>
+              </div>
+            )}
+            {dStep === "consult" && (
+              <div className="chat-input-row">
+                <input type="number" min={0} value={dConsult} onChange={(e) => setDConsult(Number(e.target.value))} className="chat-date-input" placeholder="จำนวน Consult" />
+                <button type="button" className="chat-send-btn" onClick={() => setDStep("ask_admit")}>ถัดไป →</button>
+              </div>
+            )}
+            {["ask_admit","admit_hn","admit_ward","admit_more","ask_ao","ao_ward","ao_count","ask_proc","proc_type","proc_ward","proc_count","proc_more","summary","saving","done"].includes(dStep) && (
+              <div className="chat-bubble user"><div className="chat-bubble-content">Consult: {dConsult} ราย</div></div>
+            )}
+
+            {/* ── Step: Ask Admit ── */}
+            {["ask_admit","admit_hn","admit_ward","admit_more","ask_ao","ao_ward","ao_count","ask_proc","proc_type","proc_ward","proc_count","proc_more","summary","saving","done"].includes(dStep) && (
+              <div className="chat-bubble bot">
+                <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                <div className="chat-bubble-content">🛏️ มี Admit ใหม่วันนี้ไหมคะ? {dAdmits.length > 0 && `(เพิ่มแล้ว ${dAdmits.length} ราย)`}</div>
+              </div>
+            )}
+            {(dStep === "ask_admit" || dStep === "admit_more") && (
+              <div className="chat-confirm-row">
+                <button type="button" className="chat-confirm-btn yes" onClick={() => { setDTmpHn(""); setDTmpWard("MED1"); setDStep("admit_hn"); }}>มี — เพิ่ม Admit</button>
+                <button type="button" className="chat-confirm-btn no" onClick={() => setDStep("ask_ao")}>ไม่มี{dAdmits.length > 0 ? " — ไปต่อ" : ""}</button>
+              </div>
+            )}
+
+            {/* ── Step: Admit HN ── */}
+            {dStep === "admit_hn" && (
+              <>
+                <div className="chat-bubble bot">
+                  <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                  <div className="chat-bubble-content">พิมพ์ HN ผู้ป่วยที่ Admit ค่ะ</div>
+                </div>
+                <div className="chat-input-row">
+                  <input type="text" inputMode="numeric" placeholder="เลข HN" value={dTmpHn} onChange={(e) => setDTmpHn(e.target.value)} className="chat-date-input" />
+                  <button type="button" className="chat-send-btn" disabled={!dTmpHn.trim()} onClick={() => setDStep("admit_ward")}>ถัดไป →</button>
+                </div>
+              </>
+            )}
+
+            {/* ── Step: Admit Ward ── */}
+            {dStep === "admit_ward" && (
+              <>
+                <div className="chat-bubble user"><div className="chat-bubble-content">HN: {dTmpHn}</div></div>
+                <div className="chat-bubble bot">
+                  <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                  <div className="chat-bubble-content">Admit Ward ไหนคะ?</div>
+                </div>
+                <div className="chat-input-row">
+                  <select value={dTmpWard} onChange={(e) => setDTmpWard(e.target.value)} className="chat-date-input">
+                    {wards.filter(w => w !== "__other__").map(w => <option key={w} value={w}>{w}</option>)}
+                  </select>
+                  <button type="button" className="chat-send-btn" onClick={() => {
+                    setDAdmits([...dAdmits, { hn: dTmpHn.trim(), ward: dTmpWard }]);
+                    setDStep("admit_more");
+                  }}>เพิ่ม ✓</button>
+                </div>
+              </>
+            )}
+
+            {/* Show added admits */}
+            {dAdmits.length > 0 && ["admit_more","ask_ao","ao_ward","ao_count","ask_proc","proc_type","proc_ward","proc_count","proc_more","summary","saving","done"].includes(dStep) && (
+              <div className="chat-bubble user">
+                <div className="chat-bubble-content">
+                  Admit {dAdmits.length} ราย:
+                  {dAdmits.map((a, i) => <span key={i} style={{ display: "block" }}>• HN {a.hn} ({a.ward})</span>)}
+                </div>
+              </div>
+            )}
+
+            {/* ── Step: Ask A/O ── */}
+            {["ask_ao","ao_ward","ao_count","ask_proc","proc_type","proc_ward","proc_count","proc_more","summary","saving","done"].includes(dStep) && (
+              <div className="chat-bubble bot">
+                <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                <div className="chat-bubble-content">🛏️ มี A/O (Admit แบบจำนวน) วันนี้ไหมคะ?</div>
+              </div>
+            )}
+            {dStep === "ask_ao" && (
+              <div className="chat-confirm-row">
+                <button type="button" className="chat-confirm-btn yes" onClick={() => setDStep("ao_ward")}>มี</button>
+                <button type="button" className="chat-confirm-btn no" onClick={() => setDStep("ask_proc")}>ไม่มี</button>
+              </div>
+            )}
+
+            {dStep === "ao_ward" && (
+              <>
+                <div className="chat-bubble bot">
+                  <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                  <div className="chat-bubble-content">A/O Ward ไหน กี่รายคะ?</div>
+                </div>
+                <div className="chat-input-row" style={{ flexWrap: "wrap" }}>
+                  <select value={dAoWard} onChange={(e) => setDAoWard(e.target.value)} className="chat-date-input">
+                    {wards.filter(w => w !== "__other__").map(w => <option key={w} value={w}>{w}</option>)}
+                  </select>
+                  <input type="number" min={1} value={dAoCount || ""} onChange={(e) => setDAoCount(Number(e.target.value))} className="chat-date-input" placeholder="จำนวน" style={{ maxWidth: 100 }} />
+                  <button type="button" className="chat-send-btn" disabled={!dAoCount} onClick={() => setDStep("ask_proc")}>ถัดไป →</button>
+                </div>
+              </>
+            )}
+
+            {dAoCount > 0 && ["ask_proc","proc_type","proc_ward","proc_count","proc_more","summary","saving","done"].includes(dStep) && (
+              <div className="chat-bubble user"><div className="chat-bubble-content">A/O: {dAoWard} {dAoCount} ราย</div></div>
+            )}
+
+            {/* ── Step: Ask Procedure ── */}
+            {["ask_proc","proc_type","proc_ward","proc_count","proc_more","summary","saving","done"].includes(dStep) && (
+              <div className="chat-bubble bot">
+                <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                <div className="chat-bubble-content">🩺 มีหัตถการวันนี้ไหมคะ? {dProcs.length > 0 && `(เพิ่มแล้ว ${dProcs.length} รายการ)`}</div>
+              </div>
+            )}
+            {(dStep === "ask_proc" || dStep === "proc_more") && (
+              <div className="chat-confirm-row">
+                <button type="button" className="chat-confirm-btn yes" onClick={() => { setDTmpProcKey(""); setDTmpProcWard("OPD"); setDTmpProcCount(1); setDStep("proc_type"); }}>มี — เพิ่มหัตถการ</button>
+                <button type="button" className="chat-confirm-btn no" onClick={() => setDStep("summary")}>ไม่มี{dProcs.length > 0 ? " — ไปสรุป" : ""}</button>
+              </div>
+            )}
+
+            {dStep === "proc_type" && (
+              <>
+                <div className="chat-bubble bot">
+                  <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                  <div className="chat-bubble-content">เลือกประเภทหัตถการค่ะ</div>
+                </div>
+                <div className="chat-input-row">
+                  <select value={dTmpProcKey} onChange={(e) => setDTmpProcKey(e.target.value)} className="chat-date-input" style={{ maxWidth: "100%" }}>
+                    <option value="">-- เลือก --</option>
+                    {PROCEDURE_OPTIONS.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+                  </select>
+                  <button type="button" className="chat-send-btn" disabled={!dTmpProcKey} onClick={() => setDStep("proc_ward")}>ถัดไป →</button>
+                </div>
+              </>
+            )}
+
+            {dStep === "proc_ward" && (
+              <>
+                <div className="chat-bubble user"><div className="chat-bubble-content">หัตถการ: {PROCEDURE_OPTIONS.find(p=>p.key===dTmpProcKey)?.label || dTmpProcKey}</div></div>
+                <div className="chat-bubble bot">
+                  <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                  <div className="chat-bubble-content">ทำที่ Ward ไหน กี่ราย?</div>
+                </div>
+                <div className="chat-input-row" style={{ flexWrap: "wrap" }}>
+                  <select value={dTmpProcWard} onChange={(e) => setDTmpProcWard(e.target.value)} className="chat-date-input">
+                    {PROC_WARD_OPTIONS.filter(w => w !== "__other__").map(w => <option key={w} value={w}>{w}</option>)}
+                  </select>
+                  <input type="number" min={1} value={dTmpProcCount} onChange={(e) => setDTmpProcCount(Number(e.target.value) || 1)} className="chat-date-input" placeholder="จำนวน" style={{ maxWidth: 80 }} />
+                  <button type="button" className="chat-send-btn" onClick={() => {
+                    const label = PROCEDURE_OPTIONS.find(p => p.key === dTmpProcKey)?.label || dTmpProcKey;
+                    setDProcs([...dProcs, { key: dTmpProcKey, label, ward: dTmpProcWard, count: dTmpProcCount }]);
+                    setDStep("proc_more");
+                  }}>เพิ่ม ✓</button>
+                </div>
+              </>
+            )}
+
+            {dProcs.length > 0 && ["proc_more","summary","saving","done"].includes(dStep) && (
+              <div className="chat-bubble user">
+                <div className="chat-bubble-content">
+                  หัตถการ {dProcs.length} รายการ:
+                  {dProcs.map((p, i) => <span key={i} style={{ display: "block" }}>• {p.label} x{p.count} ({p.ward})</span>)}
+                </div>
+              </div>
+            )}
+
+            {/* ── Step: Summary ── */}
+            {(dStep === "summary" || dStep === "saving") && (
+              <>
+                <div className="chat-bubble bot">
+                  <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                  <div className="chat-bubble-content">
+                    <strong>สรุปข้อมูลวันที่ {dDate}</strong><br />
+                    🏥 OPD: {dOpd} ราย<br />
+                    🚑 ER: {dEr} ราย<br />
+                    📋 Consult: {dConsult} ราย<br />
+                    {dAdmits.length > 0 && <>🛏️ Admit: {dAdmits.length} ราย<br /></>}
+                    {dAoCount > 0 && <>🛏️ A/O: {dAoWard} {dAoCount} ราย<br /></>}
+                    {dProcs.length > 0 && <>🩺 หัตถการ: {dProcs.length} รายการ<br /></>}
+                    <br />ยืนยันบันทึกข้อมูลนะคะ?
+                  </div>
+                </div>
+                {dError && <p className="chat-hn-nomatch">{dError}</p>}
+                <div className="chat-confirm-row">
+                  <button type="button" className="chat-confirm-btn yes" disabled={dSaving} onClick={dailySave}>
+                    {dSaving ? "กำลังบันทึก..." : "✓ ยืนยันบันทึก"}
+                  </button>
+                  <button type="button" className="chat-confirm-btn no" disabled={dSaving} onClick={resetDaily}>✗ เริ่มใหม่</button>
+                </div>
+              </>
+            )}
+
+            {/* ── Step: Done ── */}
+            {dStep === "done" && (
+              <>
+                <div className="chat-bubble bot">
+                  <Image src="/NurseHeart.png" alt="NurseHeart" width={36} height={36} className="chat-bubble-avatar" />
+                  <div className="chat-bubble-content">
+                    บันทึกข้อมูลวันที่ {dDate} สำเร็จแล้วค่ะ! 🎉<br />
+                    ขอบคุณที่ตั้งใจกรอกข้อมูลนะคะ 💖
+                  </div>
+                </div>
+                <div className="chat-confirm-row">
+                  <button type="button" className="chat-confirm-btn yes" onClick={resetDaily}>กรอกวันอื่น</button>
+                  <button type="button" className="chat-confirm-btn no" onClick={() => { setActiveSection(null); resetDaily(); }}>กลับเมนูหลัก</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
 
