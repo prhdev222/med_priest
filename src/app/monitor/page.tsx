@@ -63,6 +63,12 @@ export default function MonitorIndex() {
       </p>
 
       <div className="monitor-select-grid">
+        <Link href="/monitor/div" className="monitor-select-card" style={{ "--sel-color": "#0d9488" } as React.CSSProperties}>
+          <div className="monitor-select-icon">📊</div>
+          <div className="monitor-select-name">MED analysis</div>
+          <div className="monitor-select-stat">OPD, IPD (MED1/MED2), Admission rate, Delay D/C, Bed Occupancy</div>
+        </Link>
+
         <Link href="/monitor/opd" className="monitor-select-card" style={{ "--sel-color": "#3b82f6" } as React.CSSProperties}>
           <div className="monitor-select-icon">🏥</div>
           <div className="monitor-select-name">OPD ผู้ป่วยนอก</div>

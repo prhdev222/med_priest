@@ -180,6 +180,88 @@ async function getIpdOpenCases(db: D1Database) {
   return { rows: r.results };
 }
 
+/** MED analysis: ค่าเฉลี่ย OPD, IPD เฉพาะ MED1/MED2, Admission rate, Delay discharge, Bed occupancy (MED1/MED2) */
+const MED_WARDS = "('MED1','MED2')";
+
+async function getDivKpi(db: D1Database, params: URLSearchParams) {
+  const from = params.get("from") || "";
+  const to = params.get("to") || "";
+  if (!from || !to) throw new Error("from/to ไม่ถูกต้อง");
+
+  const days = Math.max(1, Math.round((new Date(to).getTime() - new Date(from).getTime()) / 86400000) + 1);
+  const admitFilter = "(stay_type = 'admit' OR stay_type IS NULL)";
+  const medWardFilter = ` AND ward IN ${MED_WARDS}`;
+
+  const [opdSumR, erSumR, admitCountR, dcCountR, delayR, delayByReasonR, delayedListR, openByWardR, wardBedsR] = await Promise.all([
+    db.prepare(`SELECT COALESCE(SUM(count),0) as v FROM opd WHERE date BETWEEN ?1 AND ?2`).bind(from, to).first<{ v: number }>(),
+    db.prepare(`SELECT COALESCE(SUM(count),0) as v FROM er WHERE date BETWEEN ?1 AND ?2`).bind(from, to).first<{ v: number }>(),
+    db.prepare(`SELECT COUNT(*) as v FROM ipd_stays WHERE ${admitFilter} AND admit_date BETWEEN ?1 AND ?2${medWardFilter}`).bind(from, to).first<{ v: number }>(),
+    db.prepare(`SELECT COUNT(*) as v FROM ipd_stays WHERE ${admitFilter} AND discharge_date BETWEEN ?1 AND ?2 AND discharge_date != ''${medWardFilter}`).bind(from, to).first<{ v: number }>(),
+    db.prepare(`SELECT AVG(delay_days) as v, COUNT(*) as n FROM discharge_plans WHERE actual_discharge_date BETWEEN ?1 AND ?2 AND delay_days > 0 AND ward IN ${MED_WARDS}`).bind(from, to).first<{ v: number | null; n: number }>(),
+    db.prepare(`SELECT delay_reason as reason, COUNT(*) as count FROM discharge_plans WHERE actual_discharge_date BETWEEN ?1 AND ?2 AND delay_days > 0 AND delay_reason != '' AND ward IN ${MED_WARDS} GROUP BY delay_reason`).bind(from, to).all(),
+    db.prepare(
+      `SELECT hn, ward, fit_discharge_date as fitDate, actual_discharge_date as actualDate, delay_days as delayDays, delay_reason as reason, delay_detail as detail FROM discharge_plans WHERE actual_discharge_date BETWEEN ?1 AND ?2 AND delay_days > 0 AND ward IN ${MED_WARDS} ORDER BY actual_discharge_date DESC LIMIT 50`
+    ).bind(from, to).all(),
+    db.prepare(
+      `SELECT ward, COUNT(*) as count FROM ipd_stays WHERE ${admitFilter} AND (discharge_date = '' OR discharge_date IS NULL)${medWardFilter} GROUP BY ward`
+    ).all(),
+    db.prepare(`SELECT ward, beds FROM ward_beds WHERE date = ?1 AND ward IN ${MED_WARDS}`).bind(to).all(),
+  ]);
+
+  const opdSum = opdSumR?.v ?? 0;
+  const erSum = erSumR?.v ?? 0;
+  const admitCount = admitCountR?.v ?? 0;
+  const dcCount = dcCountR?.v ?? 0;
+  const denom = opdSum + erSum || 1;
+  const admissionRate = Math.round((admitCount / denom) * 1000) / 10;
+  const avgDelayDays = delayR?.n ? (delayR.v ?? 0) : 0;
+
+  const occupancy: { ward: string; current: number; beds: number; pct: number }[] = [];
+  const bedsMap = new Map<string, number>((wardBedsR.results as { ward: string; beds: number }[]).map((r) => [r.ward, r.beds]));
+  for (const r of openByWardR.results as { ward: string; count: number }[]) {
+    const current = r.count;
+    const beds = bedsMap.get(r.ward) ?? 0;
+    occupancy.push({ ward: r.ward, current, beds, pct: beds > 0 ? Math.round((current / beds) * 1000) / 10 : 0 });
+  }
+
+  return {
+    from,
+    to,
+    days,
+    avgOpdPerDay: Math.round((opdSum / days) * 10) / 10,
+    avgIpdAdmitPerDay: Math.round((admitCount / days) * 10) / 10,
+    totalAdmit: admitCount,
+    totalDischarge: dcCount,
+    admissionRate,
+    avgDelayDischargeDays: Math.round(avgDelayDays * 10) / 10,
+    delayByReason: (delayByReasonR.results as { reason: string; count: number }[]).map((r) => ({ reason: r.reason || "อื่นๆ", count: r.count })),
+    delayedList: delayedListR.results,
+    occupancy,
+  };
+}
+
+/** จำนวนเตียงที่ Ward กรอกต่อวัน (สำหรับ Bed Occupancy) */
+async function getWardBeds(db: D1Database, params: URLSearchParams) {
+  const date = params.get("date") || "";
+  if (!date) throw new Error("date ไม่ถูกต้อง");
+  const r = await db.prepare(`SELECT id, date, ward, beds FROM ward_beds WHERE date = ?1 ORDER BY ward`).bind(date).all();
+  return { rows: r.results };
+}
+
+async function upsertWardBed(env: Env, body: Body) {
+  checkUnit(env, first(body.code));
+  const date = first(body.date) || todayStr();
+  const ward = first(body.ward).slice(0, 50);
+  const beds = Math.max(0, Math.min(999, Number(body.beds) || 0));
+  if (!ward) throw new Error("กรุณาเลือก Ward");
+  await env.DB.prepare(
+    `INSERT INTO ward_beds (date, ward, beds) VALUES (?1, ?2, ?3) ON CONFLICT(date, ward) DO UPDATE SET beds = excluded.beds`
+  )
+    .bind(date, ward, beds)
+    .run();
+  return { ok: true };
+}
+
 async function getPatientDataAdmin(db: D1Database, params: URLSearchParams) {
   const searchDate = params.get("date") || "";
 
@@ -326,11 +408,14 @@ async function addIpdDischarge(env: Env, body: Body) {
   checkUnit(env, first(body.code));
   const hn = first(body.hn);
   const dischargeDate = first(body.dischargeDate);
+  const fitDischargeDate = first(body.fitDischargeDate);
+  const delayReason = first(body.delayReason).slice(0, 80);
+  const delayDetail = first(body.delayDetail).slice(0, 500);
   if (!hn || !dischargeDate) throw new Error("ข้อมูลไม่ครบ");
 
   const row = await env.DB.prepare(
-    `SELECT id, admit_date FROM ipd_stays WHERE hn = ?1 AND (stay_type = 'admit' OR stay_type IS NULL) AND (discharge_date = '' OR discharge_date IS NULL) ORDER BY admit_date DESC LIMIT 1`
-  ).bind(hn).first<{ id: number; admit_date: string }>();
+    `SELECT id, admit_date, ward FROM ipd_stays WHERE hn = ?1 AND (stay_type = 'admit' OR stay_type IS NULL) AND (discharge_date = '' OR discharge_date IS NULL) ORDER BY admit_date DESC LIMIT 1`
+  ).bind(hn).first<{ id: number; admit_date: string; ward: string }>();
 
   if (!row) throw new Error("ไม่พบเคสค้างของ HN นี้");
 
@@ -341,7 +426,19 @@ async function addIpdDischarge(env: Env, body: Body) {
   await env.DB.prepare(`UPDATE ipd_stays SET discharge_date = ?1, los = ?2 WHERE id = ?3`)
     .bind(dischargeDate, los, row.id)
     .run();
-  return { ok: true, los };
+
+  let delayDays = 0;
+  if (fitDischargeDate) {
+    const fit = new Date(fitDischargeDate);
+    delayDays = Math.max(0, Math.round((dc.getTime() - fit.getTime()) / 86400000));
+    await env.DB.prepare(
+      `INSERT INTO discharge_plans (ipd_stay_id, hn, ward, fit_discharge_date, actual_discharge_date, delay_days, delay_reason, delay_detail) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)`
+    )
+      .bind(row.id, hn, row.ward || "", fitDischargeDate, dischargeDate, delayDays, delayReason, delayDetail)
+      .run();
+  }
+
+  return { ok: true, los, delayDays };
 }
 
 async function addActivity(env: Env, body: Body) {
@@ -483,6 +580,10 @@ export default {
           case "todayEntries":
             checkUnit(env, first(p.get("code"), p.get("unitCode")));
             return json(await getTodayEntries(env.DB, p.get("date") || todayStr()));
+          case "divKpi":
+            return json(await getDivKpi(env.DB, p));
+          case "wardBeds":
+            return json(await getWardBeds(env.DB, p));
           default:
             return json({ error: "unknown action" }, 400);
         }
@@ -513,6 +614,8 @@ export default {
             return json(await updateTodayRow(env, body));
           case "deleteTodayRow":
             return json(await deleteTodayRow(env, body));
+          case "upsertWardBed":
+            return json(await upsertWardBed(env, body));
           default:
             return json({ error: "unknown action" }, 400);
         }

@@ -1,12 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { FormEvent, useState, useCallback, useMemo } from "react";
+import { FormEvent, useState, useCallback, useMemo, useEffect } from "react";
 import {
   addIpdAdmit, addIpdDischarge, addStatsRow, addProcedure,
   getIpdOpenCases, getTodayEntries, updateTodayRow, deleteTodayRow,
+  getWardBeds, upsertWardBed,
   IpdOpenCase, OpdAdminItem, ErAdminItem, ConsultAdminItem, IpdAdminItem, ProcedureAdminItem,
-  PROCEDURE_OPTIONS,
+  PROCEDURE_OPTIONS, DELAY_REASON_OPTIONS, DischargePlanPayload,
 } from "@/lib/api";
 
 const wards = ["MED1", "MED2", "IMC", "Palliative", "ward90", "ICU", "__other__"];
@@ -80,8 +81,13 @@ export default function DataEntryPage() {
   const [aoCount, setAoCount] = useState(1);
   const [dcHn, setDcHn] = useState("");
   const [dcDate, setDcDate] = useState(todayIso());
+  const [dcFitDate, setDcFitDate] = useState("");
+  const [dcDelayReason, setDcDelayReason] = useState("");
+  const [dcDelayDetail, setDcDelayDetail] = useState("");
   const [openCases, setOpenCases] = useState<IpdOpenCase[]>([]);
   const [dcFilterWard, setDcFilterWard] = useState("__all__");
+  const [wardBeds, setWardBeds] = useState<Record<string, number | undefined>>({});
+  const [wardBedsSaving, setWardBedsSaving] = useState(false);
   const [msg, setMsg] = useState("");
   const [msgType, setMsgType] = useState<"success" | "error">("success");
   const [verifying, setVerifying] = useState(false);
@@ -119,13 +125,18 @@ export default function DataEntryPage() {
   const [chatLoading, setChatLoading] = useState(false);
   const [chatDcResult, setChatDcResult] = useState<{ ok: boolean; los?: number; error?: string } | null>(null);
   const [chatMode, setChatMode] = useState<"chat" | "form">("chat");
+  const [chatFitDate, setChatFitDate] = useState("");
+  const [chatDelayReason, setChatDelayReason] = useState("");
+  const [chatDelayDetail, setChatDelayDetail] = useState("");
   const chatWard = activeSection === "dcMed1" ? "MED1" : activeSection === "dcMed2" ? "MED2" : "";
   const isBlueWard = chatWard === "MED1";
-  const chatQuote = useMemo(() => {
-    const q = MED_DC_QUOTES[chatWard] || MED_DC_QUOTES.MED1;
-    return q[Math.floor(Math.random() * q.length)];
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeSection]);
+  const [chatQuote, setChatQuote] = useState(() => (MED_DC_QUOTES.MED1[0]));
+  useEffect(() => {
+    if (chatWard) {
+      const q = MED_DC_QUOTES[chatWard] || MED_DC_QUOTES.MED1;
+      setChatQuote(q[Math.floor(Math.random() * q.length)]);
+    }
+  }, [chatWard]);
   const chatWardCases = useMemo(() => openCases.filter((c) => c.ward === chatWard), [openCases, chatWard]);
   const chatMatchedCase = useMemo(() => {
     const q = chatHnInput.trim();
@@ -192,9 +203,22 @@ export default function DataEntryPage() {
   }
 
   async function chatDoDc() {
+    const isDelayed = !!chatFitDate && chatDcDate > chatFitDate;
+    if (isDelayed && !chatDelayReason) {
+      flash("กรุณาเลือกสาเหตุ Delay Discharge", "error");
+      return;
+    }
+    const payload: DischargePlanPayload = {
+      code,
+      hn: chatSelectedHn,
+      dischargeDate: chatDcDate,
+      ...(chatFitDate ? { fitDischargeDate: chatFitDate } : {}),
+      ...(isDelayed && chatDelayReason ? { delayReason: chatDelayReason, delayDetail: chatDelayDetail } : {}),
+    };
+
     setChatLoading(true);
     try {
-      const res = await addIpdDischarge({ code, hn: chatSelectedHn, dischargeDate: chatDcDate }) as { ok?: boolean; los?: number };
+      const res = await addIpdDischarge(payload) as { ok?: boolean; los?: number };
       setChatDcResult({ ok: true, los: res?.los });
       setChatStep("done");
       await Promise.all([loadOpenCases(code), loadToday(code)]);
@@ -221,6 +245,15 @@ export default function DataEntryPage() {
       setTodayCon(res.consult || []); setTodayIpd(res.ipd || []);
       setTodayProcedures(res.procedures || []);
     } catch { /* ignore */ }
+  }, []);
+
+  const loadWardBeds = useCallback(async () => {
+    try {
+      const res = await getWardBeds(todayIso());
+      const map: Record<string, number | undefined> = {};
+      for (const r of res.rows || []) map[r.ward] = r.beds;
+      setWardBeds(map);
+    } catch { setWardBeds({}); }
   }, []);
 
   async function unlockWithCode(e?: FormEvent) {
@@ -284,23 +317,56 @@ export default function DataEntryPage() {
     } catch (error) { flash((error as Error).message, "error"); }
   }
 
+  const dcIsDelayed = dcFitDate && dcDate > dcFitDate;
+  const dcPayload = (hn: string) => ({
+    code,
+    hn,
+    dischargeDate: dcDate,
+    ...(dcFitDate ? { fitDischargeDate: dcFitDate } : {}),
+    ...(dcIsDelayed ? { delayReason: dcDelayReason, delayDetail: dcDelayDetail } : {}),
+  });
+
   async function doDc(hn: string) {
+    if (dcIsDelayed && !dcDelayReason && dcFitDate) {
+      flash("กรุณาเลือกสาเหตุ Delay Discharge", "error");
+      return;
+    }
     if (!confirm(`ยืนยัน D/C HN ${hn} วันที่ ${dcDate}?`)) return;
     setMsg("");
     try {
-      await addIpdDischarge({ code, hn, dischargeDate: dcDate });
+      await addIpdDischarge(dcPayload(hn));
       flash("บันทึก D/C สำเร็จ");
       await Promise.all([loadOpenCases(code), loadToday(code)]);
     } catch (error) { flash((error as Error).message, "error"); }
   }
 
   async function submitDcByForm() {
-    if (!dcHn.trim()) return; setMsg("");
+    if (!dcHn.trim()) return;
+    if (dcIsDelayed && !dcDelayReason && dcFitDate) {
+      flash("กรุณาเลือกสาเหตุ Delay Discharge", "error");
+      return;
+    }
+    setMsg("");
     try {
-      await addIpdDischarge({ code, hn: dcHn.trim(), dischargeDate: dcDate });
+      await addIpdDischarge(dcPayload(dcHn.trim()));
       setDcHn(""); flash("บันทึก D/C สำเร็จ");
       await Promise.all([loadOpenCases(code), loadToday(code)]);
     } catch (error) { flash((error as Error).message, "error"); }
+  }
+
+  async function saveWardBeds() {
+    setWardBedsSaving(true); setMsg("");
+    try {
+      for (const ward of ["MED1", "MED2"] as const) {
+        const b = wardBeds[ward];
+        if (b !== undefined && b !== null && Number.isFinite(Number(b))) {
+          await upsertWardBed({ code, date: todayIso(), ward, beds: Number(b) });
+        }
+      }
+      flash("บันทึกจำนวนเตียง Ward สำเร็จ");
+      await loadWardBeds();
+    } catch (error) { flash((error as Error).message, "error"); }
+    finally { setWardBedsSaving(false); }
   }
 
   async function saveEditProc() {
@@ -352,7 +418,14 @@ export default function DataEntryPage() {
     </button>
   );
 
-  const nurseQuote = useMemo(() => NURSE_QUOTES[Math.floor(Math.random() * NURSE_QUOTES.length)], []);
+  const [nurseQuote, setNurseQuote] = useState(() => NURSE_QUOTES[0]);
+  useEffect(() => {
+    setNurseQuote(NURSE_QUOTES[Math.floor(Math.random() * NURSE_QUOTES.length)]);
+  }, []);
+
+  useEffect(() => {
+    if (unlocked && (activeSection === "dcMed1" || activeSection === "dcMed2")) loadWardBeds();
+  }, [unlocked, activeSection, loadWardBeds]);
 
   return (
     <section className="entry-section">
@@ -585,7 +658,7 @@ export default function DataEntryPage() {
           </div>
 
           <div className="de-dc-form-row">
-            <div className="field-group"><label>วันที่ D/C</label><input type="date" value={dcDate} onChange={(e) => setDcDate(e.target.value)} /></div>
+            <div className="field-group"><label>วันที่ D/C (จริง)</label><input type="date" value={dcDate} onChange={(e) => setDcDate(e.target.value)} /></div>
             <div className="field-group" style={{ flex: "1 1 120px" }}><label>กรอก HN แล้วกดบันทึก</label><input placeholder="เลข HN" value={dcHn} onChange={(e) => setDcHn(e.target.value)} /></div>
             <button type="button" onClick={submitDcByForm} disabled={!dcHn.trim()} style={{ alignSelf: "flex-end" }}>บันทึก D/C</button>
           </div>
@@ -1111,6 +1184,42 @@ export default function DataEntryPage() {
             <button type="button" className={chatMode === "form" ? "active" : ""} onClick={() => setChatMode("form")}>📝 Form ธรรมดา</button>
           </div>
 
+          {/* ─── Shared: Bed capacity MED1/MED2 ─── */}
+          <div className="de-bed-capacity-section" style={{ marginTop: 8, marginBottom: 16 }}>
+            <h3 className="de-dp-title">🛏️ จำนวนเตียง {chatWard || "MED1 / MED2"} (วันนี้)</h3>
+            <p className="de-dp-hint">
+              ใส่จำนวนเตียงที่ใช้ในการนอน (วันนี้/เดิม) ใช้ใน MED analysis เท่านั้น
+            </p>
+            <div className="de-bed-grid">
+              {(chatWard ? [chatWard] : (["MED1", "MED2"] as const)).map((w) => (
+                <div key={w} className="de-bed-item">
+                  <label>{w}</label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={999}
+                    placeholder="0"
+                    value={wardBeds[w] ?? ""}
+                    onChange={(e) =>
+                      setWardBeds((prev) => ({
+                        ...prev,
+                        [w]: e.target.value === "" ? undefined : Number(e.target.value),
+                      }))
+                    }
+                  />
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="de-submit-btn"
+              onClick={saveWardBeds}
+              disabled={wardBedsSaving}
+            >
+              {wardBedsSaving ? "กำลังบันทึก..." : "บันทึกจำนวนเตียง"}
+            </button>
+          </div>
+
           {/* ─── Chat Mode ─── */}
           {chatMode === "chat" && (
             <div className="chat-dc-body">
@@ -1167,7 +1276,7 @@ export default function DataEntryPage() {
                 </div>
               )}
 
-              {/* Step 3: Confirm */}
+              {/* Step 3: Confirm + Discharge Plan (optional) */}
               {(chatStep === "confirm" || chatStep === "done") && (
                 <div className="chat-bubble user">
                   <div className="chat-bubble-content">วันที่ D/C: {chatDcDate}</div>
@@ -1179,8 +1288,49 @@ export default function DataEntryPage() {
                   <div className="chat-bubble bot">
                     <Image src={`/${chatWard}head.png`} alt={chatWard} width={36} height={36} className="chat-bubble-avatar" />
                     <div className="chat-bubble-content">
-                      ยืนยัน D/C <strong>HN {chatSelectedHn}</strong> วันที่ <strong>{chatDcDate}</strong> นะคะ?
+                      <strong>Discharge Plan (ถ้ามี)</strong><br />
+                      เลือก Fit D/C date และสาเหตุ Delay ถ้าวันจำหน่ายจริงช้ากว่า
                     </div>
+                  </div>
+                  <div className="chat-input-row" style={{ flexDirection: "column", alignItems: "flex-start", gap: 8 }}>
+                    <div className="field-group" style={{ maxWidth: 260 }}>
+                      <label>Fit D/C date</label>
+                      <input
+                        type="date"
+                        value={chatFitDate}
+                        onChange={(e) => setChatFitDate(e.target.value)}
+                        className="chat-date-input"
+                      />
+                    </div>
+                    {chatFitDate && chatDcDate > chatFitDate && (
+                      <>
+                        <div className="field-group" style={{ maxWidth: 260 }}>
+                          <label>สาเหตุ Delay</label>
+                          <select
+                            value={chatDelayReason}
+                            onChange={(e) => setChatDelayReason(e.target.value)}
+                            className="chat-date-input"
+                          >
+                            <option value="">-- เลือกสาเหตุ --</option>
+                            {DELAY_REASON_OPTIONS.map((o) => (
+                              <option key={o.key} value={o.key}>{o.label}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {chatDelayReason === "other" && (
+                          <div className="field-group" style={{ maxWidth: 320 }}>
+                            <label>รายละเอียดเพิ่มเติม</label>
+                            <input
+                              type="text"
+                              placeholder="อื่นๆ (ระบุ)"
+                              value={chatDelayDetail}
+                              onChange={(e) => setChatDelayDetail(e.target.value)}
+                              className="chat-date-input"
+                            />
+                          </div>
+                        )}
+                      </>
+                    )}
                   </div>
                   <div className="chat-confirm-row">
                     <button type="button" className="chat-confirm-btn yes" onClick={chatDoDc} disabled={chatLoading}>
@@ -1218,18 +1368,36 @@ export default function DataEntryPage() {
               <div className="de-dc-form-row">
                 <div className="field-group"><label>วันที่ D/C</label><input type="date" value={chatDcDate} onChange={(e) => setChatDcDate(e.target.value)} /></div>
                 <div className="field-group" style={{ flex: "1 1 120px" }}><label>กรอก HN</label><input placeholder="เลข HN" value={chatSelectedHn} onChange={(e) => setChatSelectedHn(e.target.value)} /></div>
-                <button type="button" disabled={!chatSelectedHn.trim() || chatLoading} style={{ alignSelf: "flex-end" }}
+                <button
+                  type="button"
+                  disabled={!chatSelectedHn.trim() || chatLoading}
+                  style={{ alignSelf: "flex-end" }}
                   onClick={async () => {
                     if (!chatSelectedHn.trim()) return;
+                    const isDelayed = !!chatFitDate && chatDcDate > chatFitDate;
+                    if (isDelayed && !chatDelayReason) {
+                      flash("กรุณาเลือกสาเหตุ Delay Discharge", "error");
+                      return;
+                    }
+                    const payload: DischargePlanPayload = {
+                      code,
+                      hn: chatSelectedHn.trim(),
+                      dischargeDate: chatDcDate,
+                      ...(chatFitDate ? { fitDischargeDate: chatFitDate } : {}),
+                      ...(isDelayed && chatDelayReason ? { delayReason: chatDelayReason, delayDetail: chatDelayDetail } : {}),
+                    };
                     setChatLoading(true);
                     try {
-                      await addIpdDischarge({ code, hn: chatSelectedHn.trim(), dischargeDate: chatDcDate });
+                      await addIpdDischarge(payload);
                       flash(`D/C HN ${chatSelectedHn} สำเร็จ`);
                       setChatSelectedHn("");
                       await Promise.all([loadOpenCases(code), loadToday(code)]);
                     } catch (err) { flash((err as Error).message, "error"); }
                     finally { setChatLoading(false); }
-                  }}>บันทึก D/C</button>
+                  }}
+                >
+                  บันทึก D/C
+                </button>
               </div>
               {chatWardCases.length > 0 && (
                 <div className="de-dc-open">
@@ -1240,14 +1408,29 @@ export default function DataEntryPage() {
                         <button type="button" className="btn-sm" style={{ background: isBlueWard ? "#2563eb" : "#16a34a" }}
                           onClick={async () => {
                             if (!confirm(`ยืนยัน D/C HN ${c.hn} วันที่ ${chatDcDate}?`)) return;
+                            const isDelayed = !!chatFitDate && chatDcDate > chatFitDate;
+                            if (isDelayed && !chatDelayReason) {
+                              flash("กรุณาเลือกสาเหตุ Delay Discharge", "error");
+                              return;
+                            }
+                            const payload: DischargePlanPayload = {
+                              code,
+                              hn: c.hn,
+                              dischargeDate: chatDcDate,
+                              ...(chatFitDate ? { fitDischargeDate: chatFitDate } : {}),
+                              ...(isDelayed && chatDelayReason ? { delayReason: chatDelayReason, delayDetail: chatDelayDetail } : {}),
+                            };
                             setChatLoading(true);
                             try {
-                              await addIpdDischarge({ code, hn: c.hn, dischargeDate: chatDcDate });
+                              await addIpdDischarge(payload);
                               flash(`D/C HN ${c.hn} สำเร็จ`);
                               await Promise.all([loadOpenCases(code), loadToday(code)]);
                             } catch (err) { flash((err as Error).message, "error"); }
                             finally { setChatLoading(false); }
-                          }}>D/C</button>
+                          }}
+                        >
+                          D/C
+                        </button>
                         <strong>{c.hn}</strong>
                         <span className="de-dc-date">Admit: {c.admitDate}</span>
                       </div>

@@ -214,7 +214,16 @@ export async function addIpdAdmit(payload: {
   });
 }
 
-export async function addIpdDischarge(payload: { code: string; hn: string; dischargeDate: string }) {
+export interface DischargePlanPayload {
+  code: string;
+  hn: string;
+  dischargeDate: string;
+  fitDischargeDate?: string;
+  delayReason?: string;
+  delayDetail?: string;
+}
+
+export async function addIpdDischarge(payload: DischargePlanPayload) {
   return fetchApi("/api/sheets", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -419,3 +428,50 @@ export async function updateRow(payload: Record<string, unknown>) {
     body: JSON.stringify({ action: "updateRow", ...payload }),
   });
 }
+
+/** MED analysis (IPD เฉพาะ MED1/MED2) */
+export interface DivKpiResponse {
+  from: string;
+  to: string;
+  days: number;
+  avgOpdPerDay: number;
+  avgIpdAdmitPerDay: number;
+  totalAdmit: number;
+  totalDischarge: number;
+  admissionRate: number;
+  avgDelayDischargeDays: number;
+  delayByReason: { reason: string; count: number }[];
+  delayedList: { hn: string; ward: string; fitDate: string; actualDate: string; delayDays: number; reason: string; detail: string }[];
+  occupancy: { ward: string; current: number; beds: number; pct: number }[];
+}
+
+export async function getDivKpi(from: string, to: string): Promise<DivKpiResponse> {
+  return fetchApi(`/api/sheets?action=divKpi&from=${from}&to=${to}`);
+}
+
+export interface WardBedRow {
+  id: number;
+  date: string;
+  ward: string;
+  beds: number;
+}
+
+export async function getWardBeds(date: string): Promise<{ rows: WardBedRow[] }> {
+  return fetchApi(`/api/sheets?action=wardBeds&date=${date}`);
+}
+
+export async function upsertWardBed(payload: { code: string; date: string; ward: string; beds: number }) {
+  return fetchApi("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "upsertWardBed", ...payload }),
+  });
+}
+
+/** สาเหตุ Delay Discharge (ใช้ใน Data Entry + Monitor) */
+export const DELAY_REASON_OPTIONS = [
+  { key: "no_caregiver", label: "ไม่มี Caregiver" },
+  { key: "waiting_facility", label: "รอเตรียมสถานที่ (วัด/สถานดูแล)" },
+  { key: "family_not_ready", label: "ญาติไม่พร้อม" },
+  { key: "other", label: "อื่นๆ (ระบุ)" },
+] as const;

@@ -979,7 +979,7 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
 }
 .dc-card-blue .de-ward-dc-name { color: #1e40af; }
 .dc-card-blue .de-ward-dc-hint { color: #60a5fa; }
-.dc-card-blue .de-ward-dc-img { filter: drop-shadow(0 3px 10px rgba(59, 130, 246, 0.3)); }
+.dc-card-blue .de-ward-dc-img { filter: drop-shadow(0 4px 12px rgba(59, 130, 246, 0.3)); }
 
 /* MED2 — Green */
 .dc-card-green {
@@ -992,7 +992,7 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
 }
 .dc-card-green .de-ward-dc-name { color: #166534; }
 .dc-card-green .de-ward-dc-hint { color: #4ade80; }
-.dc-card-green .de-ward-dc-img { filter: drop-shadow(0 3px 10px rgba(34, 197, 94, 0.3)); }
+.dc-card-green .de-ward-dc-img { filter: drop-shadow(0 4px 12px rgba(34, 197, 94, 0.3)); }
 
 .de-ward-dc-top {
   display: flex;
@@ -1002,9 +1002,25 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
 }
 
 .de-ward-dc-img {
-  border-radius: 50%;
+  border-radius: 12px;
   object-fit: cover;
   flex-shrink: 0;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+}
+
+/* รูป PNG ไม่มีพื้นหลัง — ไม่ใส่กรอบ/พื้นขาว */
+.de-ward-dc-card picture,
+.de-ward-dc-card span:has(> img.de-ward-dc-img) {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+.de-ward-dc-card img.de-ward-dc-img {
+  background: transparent !important;
 }
 
 .de-ward-dc-text {
@@ -1616,6 +1632,48 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
 
 .de-dc-ward { color: var(--muted); font-weight: 500; }
 .de-dc-date { color: var(--muted); font-size: 0.82rem; }
+
+/* Discharge Plan block (Data Entry D/C) */
+.de-dp-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.de-dp-title {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #166534;
+}
+.de-dp-hint {
+  font-size: 0.82rem;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.de-bed-capacity-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+.de-bed-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px 16px;
+  margin-bottom: 12px;
+}
+.de-bed-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.de-bed-item label {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+}
+.de-bed-item input {
+  max-width: 100px;
+}
 
 /* ─── Today mini / row items ─── */
 .de-today-mini {
@@ -2754,6 +2812,71 @@ body:has(.monitor-page) section {
     grid-template-columns: 1fr;
     padding: 12px 12px;
   }
+}
+
+/* MED analysis: occupancy + delayed table */
+.div-occupancy-grid {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 16px;
+  padding: 8px 0;
+}
+.div-occupancy-item {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  background: #334155;
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+.div-occupancy-ward {
+  font-weight: 700;
+  color: #f1f5f9;
+  min-width: 64px;
+}
+.div-occupancy-val {
+  color: #94a3b8;
+}
+.div-occupancy-pct {
+  font-weight: 700;
+  color: #60a5fa;
+  margin-left: 4px;
+}
+.div-delayed-table-wrap {
+  overflow-x: auto;
+  margin-top: 8px;
+}
+.div-delayed-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+.div-delayed-table th,
+.div-delayed-table td {
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid #1f2937;
+}
+.div-delayed-table th {
+  background: #111827;
+  color: #e5e7eb;
+  font-weight: 600;
+}
+.div-delayed-table td {
+  color: #f9fafb;
+  background: #020617;
+}
+.div-delayed-table tbody tr:nth-child(odd) td {
+  background: #020617;
+}
+.div-delayed-table tbody tr:nth-child(even) td {
+  background: #0b1120;
+}
+.div-delayed-table tbody tr:hover {
+  background: #1e293b;
 }
 
 /* ─── Responsive ─── */
