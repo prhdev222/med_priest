@@ -401,7 +401,7 @@ export default function DataEntryPage() {
           <Image src="/NurseHeart.png" alt="NurseHeart" width={64} height={64} className="de-daily-chat-img" />
           <div className="de-daily-chat-text">
             <span className="de-daily-chat-title">กรอกข้อมูลวันนี้ (Chatbot)</span>
-            <span className="de-daily-chat-desc">NurseHeart จะถามทีละข้อ — OPD, ER, Consult, Admit, A/O, หัตถการ</span>
+            <span className="de-daily-chat-desc">NurseBot จะถามทีละข้อ — OPD, ER, Consult, Admit, A/O, หัตถการ</span>
           </div>
           <span className="de-menu-arrow">›</span>
         </button>
@@ -420,7 +420,7 @@ export default function DataEntryPage() {
                   {cnt > 0 && <span className="de-menu-badge">{cnt}</span>}
                   <span className="de-menu-arrow">›</span>
                 </div>
-                <Image src={`/${ward}head.png`} alt={ward} width={150} height={150} className="de-ward-dc-img" />
+                <Image src={`/${ward}head.png`} alt={ward} width={64} height={64} className="de-ward-dc-img" />
               </button>
             );
           })}
@@ -820,7 +820,7 @@ export default function DataEntryPage() {
             <Image src="/NurseHeart.png" alt="NurseHeart" width={56} height={56} className="chat-dc-avatar" />
             <div>
               <h2 className="chat-dc-title">กรอกข้อมูลประจำวัน</h2>
-              <p className="chat-dc-quote">NurseHeart จะถามทีละข้อนะคะ สู้ๆ!</p>
+              <p className="chat-dc-quote">NurseBot จะถามทีละข้อนะคะ สู้ๆ!</p>
             </div>
           </div>
 

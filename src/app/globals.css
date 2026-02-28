@@ -1027,7 +1027,7 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
 
 @media (max-width: 640px) {
   .de-ward-dc-row { grid-template-columns: 1fr; }
-  .de-ward-dc-img { width: 100px !important; height: 100px !important; }
+  .de-ward-dc-img { width: 64px !important; height: 64px !important; }
 }
 
 /* Chatbot D/C */
