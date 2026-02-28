@@ -237,7 +237,7 @@ export default function AdminPage() {
     { key: "patients", label: "ข้อมูลผู้ป่วย", icon: "🏥", desc: "ค้นหาตามวันที่ / จัดการ HN", count: ipdOpen.length },
     { key: "activities", label: "กิจกรรม", icon: "📋", desc: "จัดการหน้ากิจกรรม", count: activities.length },
     { key: "encouragement", label: "ให้กำลังใจ", icon: "💬", desc: "จัดการหน้าบอร์ดให้กำลังใจ", count: encouragement.length },
-    { key: "sheets", label: "Google Sheets", icon: "📑", desc: "ลิงก์จัดการข้อมูลภายนอก", count: GOOGLE_SHEETS.length },
+    { key: "sheets", label: "จัดการข้อมูลภายนอก", icon: "📑", desc: "ลิงก์จัดการข้อมูลภายนอก", count: GOOGLE_SHEETS.length + 1 },
   ];
 
   if (!unlocked) {
@@ -658,13 +658,21 @@ export default function AdminPage() {
           </div>
         </div>
       )}
-      {/* ═══ Tab: Google Sheets ═══ */}
+      {/* ═══ Tab: Google Sheets + ไฟล์หน่วยงาน ═══ */}
       {tab === "sheets" && (
         <div className="admin-panel">
           <div className="admin-card">
-            <h2 className="admin-card-title">📑 ลิงก์ Google Sheets จัดการข้อมูล</h2>
-            <p style={{ color: "var(--muted)", marginBottom: 16 }}>กดที่การ์ดเพื่อเปิด Google Sheet ในแท็บใหม่ — สามารถแก้ไขข้อมูลได้ถ้าเปิดด้วย Email ที่ได้รับสิทธิ์เป็น Editor</p>
+            <h2 className="admin-card-title">📑 ลิงก์จัดการข้อมูล</h2>
+            <p style={{ color: "var(--muted)", marginBottom: 16 }}>กดที่การ์ดเพื่อเปิดในแท็บใหม่</p>
             <div className="admin-sheets-grid">
+              <a href="https://prhmed-file.vercel.app/admin/login" target="_blank" rel="noopener noreferrer" className="admin-sheet-card" style={{ borderColor: "#0d9488" }}>
+                <span className="admin-sheet-icon">📁</span>
+                <div className="admin-sheet-text">
+                  <span className="admin-sheet-name">ไฟล์ของหน่วยงาน</span>
+                  <span className="admin-sheet-desc">เข้าสู่ระบบแอดมิน — อัปโหลด/จัดการไฟล์แผนกอายุรกรรม</span>
+                </div>
+                <span className="admin-sheet-arrow">↗</span>
+              </a>
               {GOOGLE_SHEETS.map((s) => (
                 <a key={s.url} href={s.url} target="_blank" rel="noopener noreferrer" className="admin-sheet-card">
                   <span className="admin-sheet-icon">{s.icon}</span>
