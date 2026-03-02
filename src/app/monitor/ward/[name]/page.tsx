@@ -164,19 +164,19 @@ export default function MonitorWard() {
         </div>
 
         <div className="monitor-card monitor-big-num">
-          <div className="monitor-big-label">Admit เดือนนี้</div>
+          <div className="monitor-big-label">Admit 30 วันล่าสุด</div>
           <div className="monitor-big-value" style={{ color: "#3b82f6" }}>{monthAdmit}</div>
           <div className="monitor-big-sub">ราย</div>
         </div>
 
         <div className="monitor-card monitor-big-num">
-          <div className="monitor-big-label">D/C เดือนนี้</div>
+          <div className="monitor-big-label">D/C 30 วันล่าสุด</div>
           <div className="monitor-big-value" style={{ color: "#14b8a6" }}>{monthDc}</div>
           <div className="monitor-big-sub">ราย</div>
         </div>
 
         <div className="monitor-card monitor-big-num">
-          <div className="monitor-big-label">A/O เดือนนี้</div>
+          <div className="monitor-big-label">A/O 30 วันล่าสุด</div>
           <div className="monitor-big-value" style={{ color: "#8b5cf6" }}>{monthAo}</div>
           <div className="monitor-big-sub">ราย</div>
         </div>

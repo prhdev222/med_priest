@@ -96,7 +96,7 @@ export default function MonitorDivPage() {
           <div className="monitor-big-sub">วัน (เฉพาะที่ Delay)</div>
         </div>
         <div className="monitor-card monitor-big-num">
-          <div className="monitor-big-label">Admit / D/C เดือนนี้ (MED1+MED2)</div>
+          <div className="monitor-big-label">Admit / D/C 30 วันล่าสุด (MED1+MED2)</div>
           <div className="monitor-big-value" style={{ color: "#8b5cf6", fontSize: "1.8rem" }}>
             {kpi != null ? `${kpi.totalAdmit} / ${kpi.totalDischarge}` : "—"}
           </div>

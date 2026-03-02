@@ -137,13 +137,13 @@ export default function MonitorOPD() {
         </div>
 
         <div className="monitor-card monitor-big-num">
-          <div className="monitor-big-label">OPD เดือนนี้</div>
+          <div className="monitor-big-label">OPD 30 วันล่าสุด</div>
           <div className="monitor-big-value" style={{ color: "#3b82f6" }}>{monthOPD.toLocaleString()}</div>
           <div className="monitor-big-sub">ราย</div>
         </div>
 
         <div className="monitor-card monitor-big-num">
-          <div className="monitor-big-label">หัตถการ OPD เดือนนี้</div>
+          <div className="monitor-big-label">หัตถการ OPD 30 วันล่าสุด</div>
           <div className="monitor-big-value" style={{ color: "#8b5cf6" }}>{totalProc.toLocaleString()}</div>
           <div className="monitor-big-sub">ครั้ง</div>
         </div>
