@@ -12,7 +12,7 @@ import {
   ProcedureStatsResponse,
   PROCEDURE_OPTIONS,
 } from "@/lib/api";
-import { localDateIso as localDateIsoFn, startOfMonthIso as startOfMonthIsoFn } from "@/lib/date";
+import { localDateIso as localDateIsoFn, offsetDateIso } from "@/lib/date";
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -23,7 +23,6 @@ const AUTO_REFRESH_MIN = 30;
 const PIE_COLORS = ["#3b82f6", "#f59e0b", "#14b8a6", "#e11d48", "#8b5cf6", "#f97316", "#22c55e", "#ec4899", "#06b6d4", "#84cc16"];
 
 function todayIso() { return localDateIsoFn(); }
-function startOfMonthIso() { return startOfMonthIsoFn(); }
 function fmtTime(d: Date) { return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }); }
 
 function procPieData(byProcedure: ProcedureStatsResponse["byProcedure"]) {
@@ -50,8 +49,10 @@ export default function MonitorWard() {
   const mountRef = useRef(true);
   const eveningDoneRef = useRef("");
 
-  const from = startOfMonthIso();
-  const to = todayIso();
+  const todayKey = todayIso();
+  // ใช้ช่วง 30 วันล่าสุดสำหรับตัวเลข Admit/D/C/AO “เดือนนี้” และหัตถการ
+  const from = offsetDateIso(-30);
+  const to = todayKey;
   const group: GroupBy = "day";
 
   const fetchAll = useCallback(async () => {
@@ -99,8 +100,8 @@ export default function MonitorWard() {
     [ipdRows, wardName],
   );
 
-  const todayAdmit = wardIpdRows.find((r) => r.key === todayIso())?.admit ?? 0;
-  const todayDc = wardIpdRows.find((r) => r.key === todayIso())?.discharge ?? 0;
+  const todayAdmit = wardIpdRows.find((r) => r.key === todayKey)?.admit ?? 0;
+  const todayDc = wardIpdRows.find((r) => r.key === todayKey)?.discharge ?? 0;
   const monthAdmit = wardIpdRows.reduce((s, r) => s + (r.admit ?? 0), 0);
   const monthDc = wardIpdRows.reduce((s, r) => s + (r.discharge ?? 0), 0);
   const monthAo = wardIpdRows.reduce((s, r) => s + ((r as { ao?: number }).ao ?? 0), 0);

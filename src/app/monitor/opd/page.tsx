@@ -9,7 +9,7 @@ import {
   ProcedureStatsResponse,
   PROCEDURE_OPTIONS,
 } from "@/lib/api";
-import { localDateIso as localDateIsoFn, startOfMonthIso as startOfMonthIsoFn, offsetDateIso } from "@/lib/date";
+import { localDateIso as localDateIsoFn, offsetDateIso } from "@/lib/date";
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -20,7 +20,6 @@ const AUTO_REFRESH_MIN = 30;
 const PIE_COLORS = ["#3b82f6", "#f59e0b", "#14b8a6", "#e11d48", "#8b5cf6", "#f97316", "#22c55e", "#ec4899", "#06b6d4", "#84cc16"];
 
 function todayIso() { return localDateIsoFn(); }
-function startOfMonthIso() { return startOfMonthIsoFn(); }
 
 function fmtTime(d: Date) {
   return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
@@ -90,11 +89,8 @@ export default function MonitorOPD() {
   const rows = useMemo(() => Array.isArray(stats?.rows) ? stats!.rows : [], [stats]);
   const todayRow = rows.find((r) => r.key === todayKey);
   const todayOPD = todayRow?.opd ?? 0;
-  // เดือนนี้: กรองเฉพาะ key ที่เป็นเดือนเดียวกับวันนี้ (YYYY-MM)
-  const currentMonthPrefix = todayKey.slice(0, 7);
-  const monthOPD = rows
-    .filter((r) => typeof r.key === "string" && r.key.startsWith(currentMonthPrefix))
-    .reduce((s, r) => s + (r.opd ?? 0), 0);
+  // “เดือนนี้” แสดงยอดรวม 30 วันล่าสุดตามช่วง from–to
+  const monthOPD = rows.reduce((s, r) => s + (r.opd ?? 0), 0);
 
   const chartRows = useMemo(() => {
     const last14 = rows.slice(-14);
