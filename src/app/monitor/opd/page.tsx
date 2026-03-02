@@ -9,7 +9,7 @@ import {
   ProcedureStatsResponse,
   PROCEDURE_OPTIONS,
 } from "@/lib/api";
-import { localDateIso as localDateIsoFn, startOfMonthIso as startOfMonthIsoFn } from "@/lib/date";
+import { localDateIso as localDateIsoFn, startOfMonthIso as startOfMonthIsoFn, offsetDateIso } from "@/lib/date";
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -46,8 +46,10 @@ export default function MonitorOPD() {
   const mountRef = useRef(true);
   const eveningDoneRef = useRef("");
 
-  const from = startOfMonthIso();
-  const to = todayIso();
+  // ดึงข้อมูลย้อนหลังอย่างน้อย 30 วัน เพื่อให้กราฟ OPD 14 วันล่าสุดข้ามเดือนก่อนหน้าได้
+  const todayKey = todayIso();
+  const from = offsetDateIso(-30);
+  const to = todayKey;
   const group: GroupBy = "day";
 
   const fetchAll = useCallback(async () => {
@@ -86,9 +88,13 @@ export default function MonitorOPD() {
   }, [fetchAll]);
 
   const rows = useMemo(() => Array.isArray(stats?.rows) ? stats!.rows : [], [stats]);
-  const todayRow = rows.find((r) => r.key === todayIso());
+  const todayRow = rows.find((r) => r.key === todayKey);
   const todayOPD = todayRow?.opd ?? 0;
-  const monthOPD = rows.reduce((s, r) => s + (r.opd ?? 0), 0);
+  // เดือนนี้: กรองเฉพาะ key ที่เป็นเดือนเดียวกับวันนี้ (YYYY-MM)
+  const currentMonthPrefix = todayKey.slice(0, 7);
+  const monthOPD = rows
+    .filter((r) => typeof r.key === "string" && r.key.startsWith(currentMonthPrefix))
+    .reduce((s, r) => s + (r.opd ?? 0), 0);
 
   const chartRows = useMemo(() => {
     const last14 = rows.slice(-14);
