@@ -2,12 +2,13 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getStats, getIpdByWard, StatsResponse, IpdByWardRow } from "@/lib/api";
+import { localDateIso as localDateIsoFn, startOfMonthIso as startOfMonthIsoFn } from "@/lib/date";
 import Link from "next/link";
 
 const MONITOR_WARDS = ["MED1", "MED2"];
 
-function todayIso() { return new Date().toISOString().slice(0, 10); }
-function startOfMonthIso() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
+function todayIso() { return localDateIsoFn(); }
+function startOfMonthIso() { return startOfMonthIsoFn(); }
 
 export default function MonitorIndex() {
   const [stats, setStats] = useState<StatsResponse | null>(null);

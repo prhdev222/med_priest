@@ -9,6 +9,7 @@ import {
   ProcedureStatsResponse,
   PROCEDURE_OPTIONS,
 } from "@/lib/api";
+import { localDateIso as localDateIsoFn, startOfMonthIso as startOfMonthIsoFn } from "@/lib/date";
 import {
   Bar, BarChart, CartesianGrid, Cell, LabelList, Pie, PieChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
@@ -18,8 +19,8 @@ const AUTO_REFRESH_HOUR = 17;
 const AUTO_REFRESH_MIN = 30;
 const PIE_COLORS = ["#3b82f6", "#f59e0b", "#14b8a6", "#e11d48", "#8b5cf6", "#f97316", "#22c55e", "#ec4899", "#06b6d4", "#84cc16"];
 
-function todayIso() { return new Date().toISOString().slice(0, 10); }
-function startOfMonthIso() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
+function todayIso() { return localDateIsoFn(); }
+function startOfMonthIso() { return startOfMonthIsoFn(); }
 
 function fmtTime(d: Date) {
   return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });

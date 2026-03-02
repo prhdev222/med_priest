@@ -2,11 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getDivKpi, DivKpiResponse, DELAY_REASON_OPTIONS } from "@/lib/api";
+import { localDateIso as localDateIsoFn, startOfMonthIso as startOfMonthIsoFn } from "@/lib/date";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 const PIE_COLORS = ["#e11d48", "#f59e0b", "#8b5cf6", "#64748b"];
-function todayIso() { return new Date().toISOString().slice(0, 10); }
-function startOfMonthIso() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-01`; }
+function todayIso() { return localDateIsoFn(); }
+function startOfMonthIso() { return startOfMonthIsoFn(); }
 function fmtTime(d: Date) { return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }); }
 
 function reasonLabel(key: string): string {
