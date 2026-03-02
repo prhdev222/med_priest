@@ -2,12 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getDivKpi, DivKpiResponse, DELAY_REASON_OPTIONS } from "@/lib/api";
-import { localDateIso as localDateIsoFn, startOfMonthIso as startOfMonthIsoFn } from "@/lib/date";
+import { localDateIso as localDateIsoFn, offsetDateIso } from "@/lib/date";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 
 const PIE_COLORS = ["#e11d48", "#f59e0b", "#8b5cf6", "#64748b"];
 function todayIso() { return localDateIsoFn(); }
-function startOfMonthIso() { return startOfMonthIsoFn(); }
 function fmtTime(d: Date) { return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }); }
 
 function reasonLabel(key: string): string {
@@ -22,8 +21,9 @@ export default function MonitorDivPage() {
   const [clock, setClock] = useState(new Date());
   const mountRef = useRef(true);
 
-  const from = startOfMonthIso();
+  // ใช้ช่วง 30 วันล่าสุดเหมือนหน้า Monitor อื่นๆ
   const to = todayIso();
+  const from = offsetDateIso(-30);
 
   const fetchKpi = useCallback(async () => {
     setRefreshing(true);
