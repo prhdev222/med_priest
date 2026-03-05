@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { getStats, getStatsCached, getIpdByWard, getIpdByWardCached, getProcedureStats, getProcedureStatsCached, GroupBy, StatsResponse, IpdByWardRow, PROCEDURE_OPTIONS, ProcedureStatsResponse } from "@/lib/api";
 import LoadingOverlay from "@/components/LoadingOverlay";
 import {
@@ -1062,6 +1063,14 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ─── MEDBOT (AI ถาม-วิเคราะห์ข้อมูล) ─── */}
+      <div className="dash-medbot-block">
+        <a href="https://ai-medpriest.pages.dev/" className="dash-medbot-link" target="_blank" rel="noopener noreferrer" title="ถามและวิเคราะห์ข้อมูลโดย AI">
+          <Image src="/MEDBOT.png" alt="MEDBOT" width={120} height={120} className="dash-medbot-img" />
+        </a>
+        <p className="dash-medbot-caption">ถาม-วิเคราะห์ข้อมูลด้วย AI</p>
+      </div>
     </section>
   );
 }
