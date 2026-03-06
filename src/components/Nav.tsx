@@ -14,6 +14,7 @@ const displayLinks = [
 const staffLinks = [
   { href: "/data-entry", label: "กรอกข้อมูล", icon: "📝" },
   { href: "/admin", label: "จัดการข้อมูล", icon: "⚙️" },
+  { href: "https://phoneprh.vercel.app/", label: "สมุดโทรศัพท์ภายใน", icon: "☎", external: true },
   { href: "https://prhmedfile.koyeb.app/", label: "ไฟล์ของหน่วยงาน", icon: "📁", external: true },
   { href: "https://med-queue-prh.vercel.app/", label: "คิวรับ case กลางแพทย์", icon: "📋", external: true },
   { href: "https://med-duty.vercel.app/", label: "ระบบถามเวรเมด", icon: "🩺", external: true },
