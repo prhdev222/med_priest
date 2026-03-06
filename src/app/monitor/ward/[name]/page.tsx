@@ -53,6 +53,7 @@ export default function MonitorWard() {
   // ใช้ช่วง 30 วันล่าสุดสำหรับตัวเลข Admit/D/C/AO “เดือนนี้” และหัตถการ
   const from = offsetDateIso(-30);
   const to = todayKey;
+  const from7 = offsetDateIso(-6);
   const group: GroupBy = "day";
 
   const fetchAll = useCallback(async () => {
@@ -100,8 +101,12 @@ export default function MonitorWard() {
     [ipdRows, wardName],
   );
 
-  const todayAdmit = wardIpdRows.find((r) => r.key === todayKey)?.admit ?? 0;
-  const todayDc = wardIpdRows.find((r) => r.key === todayKey)?.discharge ?? 0;
+  const last7Admit = wardIpdRows
+    .filter((r) => String(r.key) >= from7 && String(r.key) <= todayKey)
+    .reduce((s, r) => s + (r.admit ?? 0), 0);
+  const last7Dc = wardIpdRows
+    .filter((r) => String(r.key) >= from7 && String(r.key) <= todayKey)
+    .reduce((s, r) => s + (r.discharge ?? 0), 0);
   const monthAdmit = wardIpdRows.reduce((s, r) => s + (r.admit ?? 0), 0);
   const monthDc = wardIpdRows.reduce((s, r) => s + (r.discharge ?? 0), 0);
   const monthAo = wardIpdRows.reduce((s, r) => s + ((r as { ao?: number }).ao ?? 0), 0);
@@ -152,14 +157,14 @@ export default function MonitorWard() {
       <div className="monitor-grid monitor-grid-ward">
         {/* Big Numbers */}
         <div className="monitor-card monitor-big-num">
-          <div className="monitor-big-label">Admit วันนี้</div>
-          <div className="monitor-big-value" style={{ color: "#f59e0b" }}>{todayAdmit}</div>
+          <div className="monitor-big-label">Admit 7 วันล่าสุด</div>
+          <div className="monitor-big-value" style={{ color: "#f59e0b" }}>{last7Admit}</div>
           <div className="monitor-big-sub">ราย</div>
         </div>
 
         <div className="monitor-card monitor-big-num">
-          <div className="monitor-big-label">D/C วันนี้</div>
-          <div className="monitor-big-value" style={{ color: "#22c55e" }}>{todayDc}</div>
+          <div className="monitor-big-label">D/C 7 วันล่าสุด</div>
+          <div className="monitor-big-value" style={{ color: "#22c55e" }}>{last7Dc}</div>
           <div className="monitor-big-sub">ราย</div>
         </div>
 

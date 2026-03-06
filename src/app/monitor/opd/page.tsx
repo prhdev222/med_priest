@@ -49,6 +49,7 @@ export default function MonitorOPD() {
   const todayKey = todayIso();
   const from = offsetDateIso(-30);
   const to = todayKey;
+  const from7 = offsetDateIso(-6);
   const group: GroupBy = "day";
 
   const fetchAll = useCallback(async () => {
@@ -87,8 +88,9 @@ export default function MonitorOPD() {
   }, [fetchAll]);
 
   const rows = useMemo(() => Array.isArray(stats?.rows) ? stats!.rows : [], [stats]);
-  const todayRow = rows.find((r) => r.key === todayKey);
-  const todayOPD = todayRow?.opd ?? 0;
+  const last7OPD = rows
+    .filter((r) => typeof r.key === "string" && r.key >= from7 && r.key <= todayKey)
+    .reduce((s, r) => s + (r.opd ?? 0), 0);
   // “เดือนนี้” แสดงยอดรวม 30 วันล่าสุดตามช่วง from–to
   const monthOPD = rows.reduce((s, r) => s + (r.opd ?? 0), 0);
 
@@ -131,8 +133,8 @@ export default function MonitorOPD() {
       <div className="monitor-grid monitor-grid-opd">
         {/* Big Number */}
         <div className="monitor-card monitor-big-num">
-          <div className="monitor-big-label">OPD วันนี้</div>
-          <div className="monitor-big-value">{todayOPD.toLocaleString()}</div>
+          <div className="monitor-big-label">OPD 7 วันล่าสุด</div>
+          <div className="monitor-big-value">{last7OPD.toLocaleString()}</div>
           <div className="monitor-big-sub">ราย</div>
         </div>
 

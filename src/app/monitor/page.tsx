@@ -2,13 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getStats, getIpdByWard, StatsResponse, IpdByWardRow } from "@/lib/api";
-import { localDateIso as localDateIsoFn, startOfMonthIso as startOfMonthIsoFn } from "@/lib/date";
+import { localDateIso as localDateIsoFn, offsetDateIso } from "@/lib/date";
 import Link from "next/link";
 
 const MONITOR_WARDS = ["MED1", "MED2"];
 
 function todayIso() { return localDateIsoFn(); }
-function startOfMonthIso() { return startOfMonthIsoFn(); }
 
 export default function MonitorIndex() {
   const [stats, setStats] = useState<StatsResponse | null>(null);
@@ -18,8 +17,9 @@ export default function MonitorIndex() {
   useEffect(() => {
     if (loadedRef.current) return;
     loadedRef.current = true;
-    const from = startOfMonthIso();
-    const to = todayIso();
+    const todayKey = todayIso();
+    const from = offsetDateIso(-30);
+    const to = todayKey;
     Promise.all([
       getStats(from, to, "day"),
       getIpdByWard(from, to, "day"),
@@ -30,14 +30,19 @@ export default function MonitorIndex() {
   }, []);
 
   const rows = useMemo(() => Array.isArray(stats?.rows) ? stats!.rows : [], [stats]);
-  const todayOPD = rows.find((r) => r.key === todayIso())?.opd ?? 0;
+  const todayKey = todayIso();
+  const from7 = offsetDateIso(-6);
+  const last7OPD = rows
+    .filter((r) => typeof r.key === "string" && r.key >= from7 && r.key <= todayKey)
+    .reduce((s, r) => s + (r.opd ?? 0), 0);
 
   const wardSummary = useMemo(() => {
-    const today = todayIso();
     const map = new Map<string, { admit: number; dc: number }>();
     for (const w of MONITOR_WARDS) map.set(w, { admit: 0, dc: 0 });
     for (const r of ipdRows) {
-      if (r.key !== today || !MONITOR_WARDS.includes(r.ward)) continue;
+      if (!MONITOR_WARDS.includes(r.ward)) continue;
+      const key = String(r.key);
+      if (key < from7 || key > todayKey) continue;
       const cur = map.get(r.ward);
       if (cur) {
         cur.admit += r.admit ?? 0;
@@ -45,7 +50,7 @@ export default function MonitorIndex() {
       }
     }
     return map;
-  }, [ipdRows]);
+  }, [ipdRows, from7, todayKey]);
 
   return (
     <div className="monitor-page monitor-select-page">
@@ -73,7 +78,7 @@ export default function MonitorIndex() {
         <Link href="/monitor/opd" className="monitor-select-card" style={{ "--sel-color": "#3b82f6" } as React.CSSProperties}>
           <div className="monitor-select-icon">🏥</div>
           <div className="monitor-select-name">OPD ผู้ป่วยนอก</div>
-          <div className="monitor-select-stat">วันนี้: <strong>{todayOPD}</strong> ราย</div>
+          <div className="monitor-select-stat">7 วันล่าสุด: <strong>{last7OPD}</strong> ราย</div>
         </Link>
 
         {MONITOR_WARDS.map((w) => {
@@ -83,7 +88,7 @@ export default function MonitorIndex() {
               <div className="monitor-select-icon">🛏️</div>
               <div className="monitor-select-name">{w}</div>
               <div className="monitor-select-stat">
-                วันนี้: Admit <strong>{s?.admit ?? 0}</strong> | D/C <strong>{s?.dc ?? 0}</strong>
+                7 วันล่าสุด: Admit <strong>{s?.admit ?? 0}</strong> | D/C <strong>{s?.dc ?? 0}</strong>
               </div>
             </Link>
           );
