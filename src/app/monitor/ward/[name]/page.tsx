@@ -21,9 +21,15 @@ import {
 const AUTO_REFRESH_HOUR = 17;
 const AUTO_REFRESH_MIN = 30;
 const PIE_COLORS = ["#3b82f6", "#f59e0b", "#14b8a6", "#e11d48", "#8b5cf6", "#f97316", "#22c55e", "#ec4899", "#06b6d4", "#84cc16"];
+const DAY_COLORS = ["#dc2626", "#eab308", "#ec4899", "#22c55e", "#f97316", "#3b82f6", "#8b5cf6"];
 
 function todayIso() { return localDateIsoFn(); }
 function fmtTime(d: Date) { return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" }); }
+
+function getDayOfWeek(dateStr: string): number {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.getDay();
+}
 
 function procPieData(byProcedure: ProcedureStatsResponse["byProcedure"]) {
   const total = byProcedure.reduce((s, p) => s + Number(p.count || 0), 0);
@@ -118,6 +124,7 @@ export default function MonitorWard() {
       admit: r.admit ?? 0,
       dc: r.discharge ?? 0,
       ao: (r as { ao?: number }).ao ?? 0,
+      dayIdx: getDayOfWeek(String(r.key)),
     }));
   }, [wardIpdRows]);
 
@@ -204,12 +211,30 @@ export default function MonitorWard() {
               <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", color: "#f1f5f9" }} />
               <Bar dataKey="admit" name="Admit (ราย)" fill="#f59e0b" radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="admit" position="top" fill="#fbbf24" fontSize={13} fontWeight={600} />
+                {chartRows.map((row, i) => (
+                  <Cell
+                    key={i}
+                    fill={typeof row.dayIdx === "number" && row.dayIdx >= 0 ? DAY_COLORS[row.dayIdx] : "#f59e0b"}
+                  />
+                ))}
               </Bar>
               <Bar dataKey="dc" name="D/C (ราย)" fill="#22c55e" radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="dc" position="top" fill="#4ade80" fontSize={13} fontWeight={600} />
+                {chartRows.map((row, i) => (
+                  <Cell
+                    key={i}
+                    fill={typeof row.dayIdx === "number" && row.dayIdx >= 0 ? DAY_COLORS[row.dayIdx] : "#22c55e"}
+                  />
+                ))}
               </Bar>
               <Bar dataKey="ao" name="A/O (ราย)" fill="#8b5cf6" radius={[4, 4, 0, 0]}>
                 <LabelList dataKey="ao" position="top" fill="#a78bfa" fontSize={13} fontWeight={600} />
+                {chartRows.map((row, i) => (
+                  <Cell
+                    key={i}
+                    fill={typeof row.dayIdx === "number" && row.dayIdx >= 0 ? DAY_COLORS[row.dayIdx] : "#8b5cf6"}
+                  />
+                ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>

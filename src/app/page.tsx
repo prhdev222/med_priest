@@ -485,11 +485,46 @@ export default function DashboardPage() {
   const procedurePieData = useMemo(() => procPieData(viewProcedureStats.byProcedure), [viewProcedureStats]);
   const ipdWardProcPie = useMemo(() => procPieData(viewIpdWardProcStats.byProcedure), [viewIpdWardProcStats]);
 
-  const procedureChartRows = useMemo(() => viewProcedureStats.rows.map((r) => ({ ...r, label: shortLabel(r.key, group) })), [viewProcedureStats.rows, group]);
-  const procOpdChartRows = useMemo(() => viewProcOpdStats.rows.map((r) => ({ ...r, label: shortLabel(r.key, group) })), [viewProcOpdStats.rows, group]);
-  const procErChartRows = useMemo(() => viewProcErStats.rows.map((r) => ({ ...r, label: shortLabel(r.key, group) })), [viewProcErStats.rows, group]);
-  const procConsultChartRows = useMemo(() => procConsultStats.rows.map((r) => ({ ...r, label: shortLabel(r.key, group) })), [procConsultStats.rows, group]);
-  const ipdWardProcChartRows = useMemo(() => viewIpdWardProcStats.rows.map((r) => ({ ...r, label: shortLabel(r.key, group) })), [viewIpdWardProcStats.rows, group]);
+  const procedureChartRows = useMemo(
+    () => viewProcedureStats.rows.map((r) => ({
+      ...r,
+      label: shortLabel(r.key, group),
+      dayIdx: group === "day" && String(r.key).length >= 10 ? getDayOfWeek(String(r.key)) : -1,
+    })),
+    [viewProcedureStats.rows, group],
+  );
+  const procOpdChartRows = useMemo(
+    () => viewProcOpdStats.rows.map((r) => ({
+      ...r,
+      label: shortLabel(r.key, group),
+      dayIdx: group === "day" && String(r.key).length >= 10 ? getDayOfWeek(String(r.key)) : -1,
+    })),
+    [viewProcOpdStats.rows, group],
+  );
+  const procErChartRows = useMemo(
+    () => viewProcErStats.rows.map((r) => ({
+      ...r,
+      label: shortLabel(r.key, group),
+      dayIdx: group === "day" && String(r.key).length >= 10 ? getDayOfWeek(String(r.key)) : -1,
+    })),
+    [viewProcErStats.rows, group],
+  );
+  const procConsultChartRows = useMemo(
+    () => procConsultStats.rows.map((r) => ({
+      ...r,
+      label: shortLabel(r.key, group),
+      dayIdx: group === "day" && String(r.key).length >= 10 ? getDayOfWeek(String(r.key)) : -1,
+    })),
+    [procConsultStats.rows, group],
+  );
+  const ipdWardProcChartRows = useMemo(
+    () => viewIpdWardProcStats.rows.map((r) => ({
+      ...r,
+      label: shortLabel(r.key, group),
+      dayIdx: group === "day" && String(r.key).length >= 10 ? getDayOfWeek(String(r.key)) : -1,
+    })),
+    [viewIpdWardProcStats.rows, group],
+  );
 
   const totals = useMemo(() => {
     return viewRows.reduce((acc, row) => {
@@ -642,7 +677,7 @@ export default function DashboardPage() {
   }
 
   /* ─── Reusable bar chart renderer ─── */
-  function renderBarChart(rows: { key: string; total: number; label: string }[], color: string, name: string) {
+  function renderBarChart(rows: { key: string; total: number; label: string; dayIdx?: number }[], color: string, name: string) {
     const sw = Math.max(800, rows.length * 48);
     return (
       <div className="chart-scroll-wrap" style={{ overflowX: "auto" }}>
@@ -653,7 +688,16 @@ export default function DashboardPage() {
               <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
               <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
               <Tooltip labelFormatter={(_, p) => p?.[0]?.payload?.label ?? ""} formatter={(v: number) => [`${v} ครั้ง`, name]} />
-              <Bar dataKey="total" name={name} fill={color} radius={[4, 4, 0, 0]} />
+              <Bar dataKey="total" name={name} fill={color} radius={[4, 4, 0, 0]}>
+                {rows.map((entry, i) => (
+                  <Cell
+                    key={i}
+                    fill={group === "day" && typeof entry.dayIdx === "number" && entry.dayIdx >= 0
+                      ? DAY_COLORS[entry.dayIdx]
+                      : color}
+                  />
+                ))}
+              </Bar>
             </BarChart>
           </ResponsiveContainer>
         </div>

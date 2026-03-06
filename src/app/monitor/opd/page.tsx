@@ -18,8 +18,14 @@ import {
 const AUTO_REFRESH_HOUR = 17;
 const AUTO_REFRESH_MIN = 30;
 const PIE_COLORS = ["#3b82f6", "#f59e0b", "#14b8a6", "#e11d48", "#8b5cf6", "#f97316", "#22c55e", "#ec4899", "#06b6d4", "#84cc16"];
+const DAY_COLORS = ["#dc2626", "#eab308", "#ec4899", "#22c55e", "#f97316", "#3b82f6", "#8b5cf6"];
 
 function todayIso() { return localDateIsoFn(); }
+
+function getDayOfWeek(dateStr: string): number {
+  const d = new Date(dateStr + "T00:00:00");
+  return d.getDay();
+}
 
 function fmtTime(d: Date) {
   return d.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
@@ -99,6 +105,7 @@ export default function MonitorOPD() {
     return last14.map((r) => ({
       label: r.key.slice(5),
       opd: r.opd ?? 0,
+      dayIdx: getDayOfWeek(String(r.key)),
     }));
   }, [rows]);
 
@@ -163,7 +170,12 @@ export default function MonitorOPD() {
                 formatter={(v: number) => [`${v} ราย`, "OPD"]} />
               <Bar dataKey="opd" name="OPD (ราย)" fill="#3b82f6" radius={[6, 6, 0, 0]}>
                 <LabelList dataKey="opd" position="top" fill="#e2e8f0" fontSize={14} fontWeight={600} />
-                {chartRows.map((_, i) => <Cell key={i} fill={i === chartRows.length - 1 ? "#60a5fa" : "#3b82f6"} />)}
+                {chartRows.map((row, i) => (
+                  <Cell
+                    key={i}
+                    fill={typeof row.dayIdx === "number" && row.dayIdx >= 0 ? DAY_COLORS[row.dayIdx] : "#3b82f6"}
+                  />
+                ))}
               </Bar>
             </BarChart>
           </ResponsiveContainer>
