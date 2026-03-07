@@ -1108,6 +1108,13 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* ─── Dashboard ผลประเมินความพึงพอใจ ─── */}
+      <div className="dash-medbot-block" style={{ marginBottom: 8 }}>
+        <a href="https://monk-feedback.vercel.app/dashboard" className="dash-medbot-link" target="_blank" rel="noopener noreferrer" title="ดูผลประเมินความพึงพอใจ" style={{ padding: "12px 20px", borderRadius: 8, background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)", color: "#fff", fontWeight: 600, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 8, lineHeight: 1.2 }}>
+          <span>⭐</span> ดู dashboard ผลประเมินความพึงพอใจ
+        </a>
+      </div>
+
       {/* ─── MEDBOT (AI ถาม-วิเคราะห์ข้อมูล) ─── */}
       <div className="dash-medbot-block">
         <a href="https://ai-medpriest.pages.dev/" className="dash-medbot-link" target="_blank" rel="noopener noreferrer" title="ถามและวิเคราะห์ข้อมูลโดย AI">
