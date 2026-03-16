@@ -256,7 +256,7 @@ export default function MonitorWard() {
       )}
 
       <div className="monitor-grid monitor-grid-ward">
-        {/* Big Numbers */}
+        {/* Big Numbers (แถวเดียว 3 กล่อง) */}
         {visibleBlocks.has("summary") && (
         <>
         <div className="monitor-card monitor-big-num">
@@ -268,24 +268,6 @@ export default function MonitorWard() {
         <div className="monitor-card monitor-big-num">
           <div className="monitor-big-label">D/C 7 วันล่าสุด</div>
           <div className="monitor-big-value" style={{ color: "#22c55e" }}>{last7Dc}</div>
-          <div className="monitor-big-sub">ราย</div>
-        </div>
-
-        <div className="monitor-card monitor-big-num">
-          <div className="monitor-big-label">Admit 30 วันล่าสุด</div>
-          <div className="monitor-big-value" style={{ color: "#3b82f6" }}>{monthAdmit}</div>
-          <div className="monitor-big-sub">ราย</div>
-        </div>
-
-        <div className="monitor-card monitor-big-num">
-          <div className="monitor-big-label">D/C 30 วันล่าสุด</div>
-          <div className="monitor-big-value" style={{ color: "#14b8a6" }}>{monthDc}</div>
-          <div className="monitor-big-sub">ราย</div>
-        </div>
-
-        <div className="monitor-card monitor-big-num">
-          <div className="monitor-big-label">A/O 30 วันล่าสุด</div>
-          <div className="monitor-big-value" style={{ color: "#8b5cf6" }}>{monthAo}</div>
           <div className="monitor-big-sub">ราย</div>
         </div>
 
