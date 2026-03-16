@@ -491,11 +491,12 @@ export default function DataEntryPage() {
       setPlanTodayRows(Array.isArray(t1?.rows) ? t1.rows : []);
       setPlanTomorrowRows(Array.isArray(t2?.rows) ? t2.rows : []);
     } catch (error) {
-      flash((error as Error).message, "error");
+      setMsg((error as Error).message || "เกิดข้อผิดพลาดในการโหลดแผนหัตถการ");
+      setMsgType("error");
     } finally {
       setPlanLoading(false);
     }
-  }, [flash]);
+  }, []);
 
   useEffect(() => {
     if (!unlocked) return;
