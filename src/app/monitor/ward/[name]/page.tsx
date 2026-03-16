@@ -171,6 +171,7 @@ export default function MonitorWard() {
   };
 
   const [visibleBlocks, setVisibleBlocks] = useState<Set<string>>(new Set(["summary", "ipd", "proc", "plan"]));
+  const [summaryMode, setSummaryMode] = useState<"compact" | "full">("compact");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const toggleBlock = (key: string) => {
     setVisibleBlocks((prev) => {
@@ -252,11 +253,31 @@ export default function MonitorWard() {
           >
             แผนหัตถการ (รายเตียง)
           </button>
+          {visibleBlocks.has("summary") && (
+            <>
+              <span style={{ width: 1, height: 18, background: "#1f2933", margin: "0 4px" }} />
+              <span style={{ fontSize: "0.9rem", color: "#9ca3af" }}>โหมดสรุป:</span>
+              <button
+                type="button"
+                className={`monitor-toggle-chip${summaryMode === "compact" ? " active" : ""}`}
+                onClick={() => setSummaryMode("compact")}
+              >
+                3 ค่า
+              </button>
+              <button
+                type="button"
+                className={`monitor-toggle-chip${summaryMode === "full" ? " active" : ""}`}
+                onClick={() => setSummaryMode("full")}
+              >
+                6 ค่า
+              </button>
+            </>
+          )}
         </div>
       )}
 
       <div className="monitor-grid monitor-grid-ward">
-        {/* Big Numbers (แถวเดียว 3 กล่อง) */}
+        {/* Big Numbers (เลือกได้ 3 ค่า หรือ 6 ค่า) */}
         {visibleBlocks.has("summary") && (
         <>
         <div className="monitor-card monitor-big-num">
@@ -276,6 +297,28 @@ export default function MonitorWard() {
           <div className="monitor-big-value" style={{ color: "#e11d48" }}>{avgLos.toFixed(1)}</div>
           <div className="monitor-big-sub">วัน</div>
         </div>
+
+        {summaryMode === "full" && (
+          <>
+            <div className="monitor-card monitor-big-num">
+              <div className="monitor-big-label">Admit 30 วันล่าสุด</div>
+              <div className="monitor-big-value" style={{ color: "#3b82f6" }}>{monthAdmit}</div>
+              <div className="monitor-big-sub">ราย</div>
+            </div>
+
+            <div className="monitor-card monitor-big-num">
+              <div className="monitor-big-label">D/C 30 วันล่าสุด</div>
+              <div className="monitor-big-value" style={{ color: "#14b8a6" }}>{monthDc}</div>
+              <div className="monitor-big-sub">ราย</div>
+            </div>
+
+            <div className="monitor-card monitor-big-num">
+              <div className="monitor-big-label">A/O 30 วันล่าสุด</div>
+              <div className="monitor-big-value" style={{ color: "#8b5cf6" }}>{monthAo}</div>
+              <div className="monitor-big-sub">ราย</div>
+            </div>
+          </>
+        )}
         </>
         )}
 
