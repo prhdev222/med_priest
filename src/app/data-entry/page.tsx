@@ -4,15 +4,18 @@ import Image from "next/image";
 import { FormEvent, useState, useCallback, useMemo, useEffect } from "react";
 import {
   addIpdAdmit, addIpdDischarge, addStatsRow, addProcedure,
+  addProcedurePlan, getProcedurePlans, markProcedurePlanDone,
   getIpdOpenCases, getTodayEntries, updateTodayRow, deleteTodayRow,
   getWardBeds, upsertWardBed,
   IpdOpenCase, OpdAdminItem, ErAdminItem, ConsultAdminItem, IpdAdminItem, ProcedureAdminItem,
+  ProcedurePlanRow,
   PROCEDURE_OPTIONS, DELAY_REASON_OPTIONS, DischargePlanPayload,
 } from "@/lib/api";
 
 const wards = ["MED1", "MED2", "IMC", "Palliative", "ward90", "ICU", "__other__"];
 const PROC_WARD_OPTIONS = ["OPD", "ER", "MED1", "MED2", "IMC", "Palliative", "ward90", "ICU", "__other__"];
 const todayIso = () => new Date().toISOString().slice(0, 10);
+const tomorrowIso = () => new Date(Date.now() + 86400000).toISOString().slice(0, 10);
 
 const NURSE_QUOTES = [
   "ทุกตัวเลขที่กรอก คือหลักฐานของความทุ่มเท 💛",
@@ -25,7 +28,7 @@ const NURSE_QUOTES = [
   "ทุกครั้งที่กรอก คือการสร้างอนาคตที่ดีกว่าให้แผนกเรา 📊",
 ];
 
-type Section = "opd" | "admit" | "ao" | "dc" | "proc" | "today" | "dcMed1" | "dcMed2" | "dailyChat" | null;
+type Section = "opd" | "admit" | "ao" | "dc" | "proc" | "today" | "dcMed1" | "dcMed2" | "planMed1" | "planMed2" | "dailyChat" | null;
 
 type DailyStep =
   | "date" | "opd" | "er" | "consult"
@@ -106,6 +109,18 @@ export default function DataEntryPage() {
   const [editProcKey, setEditProcKey] = useState("");
   const [editProcLabel, setEditProcLabel] = useState("");
   const [editProcCount, setEditProcCount] = useState(1);
+
+  // Procedure Plan (MED1/MED2 + Bed)
+  const planWard = activeSection === "planMed1" ? "MED1" : activeSection === "planMed2" ? "MED2" : "";
+  const [planDate, setPlanDate] = useState(tomorrowIso());
+  const [planBed, setPlanBed] = useState("");
+  const [planProcKey, setPlanProcKey] = useState("");
+  const [planProcLabelOther, setPlanProcLabelOther] = useState("");
+  const [planNote, setPlanNote] = useState("");
+  const [planTodayRows, setPlanTodayRows] = useState<ProcedurePlanRow[]>([]);
+  const [planTomorrowRows, setPlanTomorrowRows] = useState<ProcedurePlanRow[]>([]);
+  const [planDoneDate, setPlanDoneDate] = useState(todayIso());
+  const [planLoading, setPlanLoading] = useState(false);
   const [editOpdId, setEditOpdId] = useState<number | null>(null);
   const [editOpdVal, setEditOpdVal] = useState(0);
   const [editErId, setEditErId] = useState<number | null>(null);
@@ -317,6 +332,44 @@ export default function DataEntryPage() {
     } catch (error) { flash((error as Error).message, "error"); }
   }
 
+  async function submitProcedurePlan(e: FormEvent) {
+    e.preventDefault(); setMsg("");
+    if (!planWard) { flash("กรุณาเลือก Ward", "error"); return; }
+    if (!planDate) { flash("กรุณาเลือกวันที่", "error"); return; }
+    if (!planBed.trim()) { flash("กรุณากรอกเลขเตียง", "error"); return; }
+    if (!planProcKey) { flash("เลือกประเภทหัตถการ", "error"); return; }
+
+    const otherLabel = planProcKey === "other" ? planProcLabelOther.trim() : "";
+    if (planProcKey === "other" && !otherLabel) { flash("กรุณาระบุหัตถการ (Other)", "error"); return; }
+
+    try {
+      await addProcedurePlan({
+        code,
+        planDate,
+        ward: planWard,
+        bed: planBed.trim(),
+        procedureKey: planProcKey,
+        procedureLabel: planProcKey === "other" ? otherLabel : undefined,
+        note: planNote.trim() || undefined,
+      });
+      setPlanBed(""); setPlanProcKey(""); setPlanProcLabelOther(""); setPlanNote("");
+      flash("บันทึกแผนหัตถการสำเร็จ");
+      await loadPlanLists(planWard);
+    } catch (error) { flash((error as Error).message, "error"); }
+  }
+
+  async function doMarkPlanDone(id: number) {
+    if (!planWard) return;
+    if (!planDoneDate) { flash("กรุณาเลือกวันที่ทำจริง", "error"); return; }
+    if (!confirm(`ยืนยันติ๊กทำแล้ว (วันที่ทำจริง: ${planDoneDate}) ?`)) return;
+    setMsg("");
+    try {
+      await markProcedurePlanDone({ code, id, doneDate: planDoneDate, addToProcedures: true });
+      flash("บันทึกทำแล้วสำเร็จ");
+      await Promise.all([loadPlanLists(planWard), loadToday(code)]);
+    } catch (error) { flash((error as Error).message, "error"); }
+  }
+
   const dcIsDelayed = dcFitDate && dcDate > dcFitDate;
   const dcPayload = (hn: string) => ({
     code,
@@ -427,6 +480,32 @@ export default function DataEntryPage() {
     if (unlocked && (activeSection === "dcMed1" || activeSection === "dcMed2")) loadWardBeds();
   }, [unlocked, activeSection, loadWardBeds]);
 
+  const loadPlanLists = useCallback(async (ward: string) => {
+    if (!ward) return;
+    setPlanLoading(true);
+    try {
+      const [t1, t2] = await Promise.all([
+        getProcedurePlans(todayIso(), ward),
+        getProcedurePlans(tomorrowIso(), ward),
+      ]);
+      setPlanTodayRows(Array.isArray(t1?.rows) ? t1.rows : []);
+      setPlanTomorrowRows(Array.isArray(t2?.rows) ? t2.rows : []);
+    } catch (error) {
+      flash((error as Error).message, "error");
+    } finally {
+      setPlanLoading(false);
+    }
+  }, [flash]);
+
+  useEffect(() => {
+    if (!unlocked) return;
+    if (activeSection === "planMed1" || activeSection === "planMed2") {
+      setPlanDate(tomorrowIso());
+      setPlanDoneDate(todayIso());
+      loadPlanLists(planWard);
+    }
+  }, [unlocked, activeSection, loadPlanLists, planWard]);
+
   return (
     <section className="entry-section">
       <div className="page-header">
@@ -484,17 +563,24 @@ export default function DataEntryPage() {
           {(["MED1", "MED2"] as const).map((ward) => {
             const cnt = openCases.filter((c) => c.ward === ward).length;
             return (
-              <button key={ward} className={`de-ward-dc-card ${ward === "MED1" ? "dc-card-blue" : "dc-card-green"}`} onClick={() => { resetChat(); setActiveSection(ward === "MED1" ? "dcMed1" : "dcMed2"); }}>
+              <div key={ward} className={`de-ward-dc-card ${ward === "MED1" ? "dc-card-blue" : "dc-card-green"}`} style={{ cursor: "default" }}>
                 <div className="de-ward-dc-top">
                   <div className="de-ward-dc-text">
-                    <span className="de-ward-dc-name">D/C ผู้ป่วย {ward}</span>
-                    <span className="de-ward-dc-hint">เข้ามากรอกวัน D/C ผู้ป่วยของ {ward}</span>
+                    <span className="de-ward-dc-name">{ward}</span>
+                    <span className="de-ward-dc-hint">D/C และวางแผนหัตถการล่วงหน้า</span>
                   </div>
                   {cnt > 0 && <span className="de-menu-badge">{cnt}</span>}
-                  <span className="de-menu-arrow">›</span>
                 </div>
                 <Image src={`/${ward}head.png`} alt={ward} width={64} height={64} className="de-ward-dc-img" />
-              </button>
+                <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 10 }}>
+                  <button type="button" className="btn-sm" style={{ background: "#16a34a" }} onClick={() => { resetChat(); setActiveSection(ward === "MED1" ? "dcMed1" : "dcMed2"); }}>
+                    ✅ D/C
+                  </button>
+                  <button type="button" className="btn-sm" style={{ background: "#f59e0b" }} onClick={() => { setActiveSection(ward === "MED1" ? "planMed1" : "planMed2"); }}>
+                    📋 วางแผนหัตถการ
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -753,6 +839,89 @@ export default function DataEntryPage() {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ══════════════════ วางแผนหัตถการ (MED1/MED2) ══════════════════ */}
+      {unlocked && (activeSection === "planMed1" || activeSection === "planMed2") && (
+        <div className="de-panel">
+          {backBtn}
+          <div className="de-panel-header" style={{ "--card-accent": "#f59e0b" } as React.CSSProperties}>
+            <span>📋</span><h2>วางแผนหัตถการ {planWard}</h2>
+          </div>
+
+          <form onSubmit={submitProcedurePlan} className="entry-form">
+            <div className="field-grid-2">
+              <div className="field-group"><label>วันที่ (แผน)</label><input type="date" value={planDate} onChange={(e) => setPlanDate(e.target.value)} required /></div>
+              <div className="field-group"><label>เตียง</label><input placeholder="เช่น 3, 5A" value={planBed} onChange={(e) => setPlanBed(e.target.value)} required /></div>
+            </div>
+            <div className="field-group">
+              <label>หัตถการ</label>
+              <select value={planProcKey} onChange={(e) => setPlanProcKey(e.target.value)} required>
+                <option value="">-- เลือก --</option>
+                {PROCEDURE_OPTIONS.map((o) => <option key={o.key} value={o.key}>{o.label}</option>)}
+              </select>
+            </div>
+            {planProcKey === "other" && (
+              <div className="field-group">
+                <label>ระบุ (Other)</label>
+                <input placeholder="พิมพ์ชื่อหัตถการ" value={planProcLabelOther} onChange={(e) => setPlanProcLabelOther(e.target.value)} />
+              </div>
+            )}
+            <div className="field-group"><label>หมายเหตุ (ถ้ามี)</label><input placeholder="เช่น ก่อน D/C, รอญาติ" value={planNote} onChange={(e) => setPlanNote(e.target.value)} /></div>
+            <button type="submit" className="de-submit-btn" style={{ background: "#f59e0b" }}>บันทึกแผน</button>
+          </form>
+
+          <div className="de-today-mini">
+            <h3 style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+              <span>แผนพรุ่งนี้ ({tomorrowIso()})</span>
+              <button type="button" className="btn-sm btn-secondary" onClick={() => loadPlanLists(planWard)} disabled={planLoading}>
+                {planLoading ? "กำลังโหลด..." : "รีเฟรช"}
+              </button>
+            </h3>
+            {planTomorrowRows.length === 0 ? (
+              <p style={{ color: "var(--muted)", textAlign: "center", padding: 8 }}>ยังไม่มีแผนพรุ่งนี้</p>
+            ) : (
+              planTomorrowRows.map((r) => (
+                <div key={r.id} className="de-row-item">
+                  <span className="de-row-badge" style={{ background: "#f59e0b" }}>Plan</span>
+                  <span><strong>เตียง {r.bed || "-"}</strong></span>
+                  <span>{r.procedureKey === "other" ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other") : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}</span>
+                  {r.note && <span style={{ color: "var(--muted)" }}>{r.note}</span>}
+                </div>
+              ))
+            )}
+          </div>
+
+          <div className="de-today-mini" style={{ marginTop: 14 }}>
+            <h3>แผนวันนี้ ({todayIso()}) — ติ๊กทำแล้วเพื่อบันทึก “ทำจริง”</h3>
+            <div className="field-grid-2" style={{ marginBottom: 8 }}>
+              <div className="field-group">
+                <label>วันที่ทำจริง</label>
+                <input type="date" value={planDoneDate} onChange={(e) => setPlanDoneDate(e.target.value)} />
+              </div>
+            </div>
+            {planTodayRows.length === 0 ? (
+              <p style={{ color: "var(--muted)", textAlign: "center", padding: 8 }}>ยังไม่มีแผนวันนี้</p>
+            ) : (
+              planTodayRows.map((r) => (
+                <div key={r.id} className="de-row-item">
+                  <span className="de-row-badge" style={{ background: r.status === "done" ? "#16a34a" : "#f59e0b" }}>
+                    {r.status === "done" ? "Done" : "Plan"}
+                  </span>
+                  <span><strong>เตียง {r.bed || "-"}</strong></span>
+                  <span>{r.procedureKey === "other" ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other") : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}</span>
+                  {r.status === "done" ? (
+                    <span style={{ color: "#16a34a", fontWeight: 600 }}>ทำแล้ว ({r.doneDate || "-"})</span>
+                  ) : (
+                    <button type="button" className="btn-sm" style={{ background: "#16a34a" }} onClick={() => doMarkPlanDone(r.id)}>
+                      ✓ ทำแล้ว
+                    </button>
+                  )}
+                </div>
+              ))
+            )}
+          </div>
         </div>
       )}
 

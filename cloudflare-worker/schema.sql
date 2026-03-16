@@ -59,6 +59,22 @@ CREATE TABLE IF NOT EXISTS procedures (
   ward            TEXT DEFAULT ''
 );
 
+-- แผนหัตถการรายเตียง (สำหรับวางแผนล่วงหน้า และติ๊กทำแล้วในวันจริง)
+CREATE TABLE IF NOT EXISTS procedure_plans (
+  id               INTEGER PRIMARY KEY AUTOINCREMENT,
+  plan_date        TEXT NOT NULL,
+  ward             TEXT NOT NULL,
+  bed              TEXT DEFAULT '',
+  procedure_key    TEXT NOT NULL,
+  procedure_label  TEXT DEFAULT '',
+  note             TEXT DEFAULT '',
+  status           TEXT NOT NULL DEFAULT 'planned', -- planned | done | cancelled
+  done_date        TEXT DEFAULT '',
+  done_procedure_id INTEGER,
+  created_at       TEXT DEFAULT (datetime('now')),
+  updated_at       TEXT DEFAULT (datetime('now'))
+);
+
 -- Discharge Plan: Fit D/C date, Actual D/C, Delay reason (สำหรับ DIV KPI)
 CREATE TABLE IF NOT EXISTS discharge_plans (
   id                   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -91,6 +107,9 @@ CREATE INDEX IF NOT EXISTS idx_ipd_admit ON ipd_stays(admit_date);
 CREATE INDEX IF NOT EXISTS idx_ipd_discharge ON ipd_stays(discharge_date);
 CREATE INDEX IF NOT EXISTS idx_procedures_date ON procedures(date);
 CREATE INDEX IF NOT EXISTS idx_procedures_ward ON procedures(ward);
+CREATE INDEX IF NOT EXISTS idx_proc_plans_date ON procedure_plans(plan_date);
+CREATE INDEX IF NOT EXISTS idx_proc_plans_ward ON procedure_plans(ward);
+CREATE INDEX IF NOT EXISTS idx_proc_plans_status ON procedure_plans(status);
 CREATE INDEX IF NOT EXISTS idx_discharge_plans_actual ON discharge_plans(actual_discharge_date);
 CREATE INDEX IF NOT EXISTS idx_ward_beds_date ON ward_beds(date);
 CREATE INDEX IF NOT EXISTS idx_ward_beds_ward ON ward_beds(ward);

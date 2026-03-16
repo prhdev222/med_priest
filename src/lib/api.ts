@@ -389,6 +389,56 @@ export function getProcedureStatsCached(from: string, to: string, group: GroupBy
   };
 }
 
+export interface ProcedurePlanRow {
+  id: number;
+  planDate: string;
+  ward: string;
+  bed: string;
+  procedureKey: string;
+  procedureLabel: string;
+  note: string;
+  status: "planned" | "done" | "cancelled" | string;
+  doneDate: string;
+  doneProcedureId: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export async function getProcedurePlans(date: string, ward?: string): Promise<{ rows: ProcedurePlanRow[] }> {
+  const url = `/api/sheets?action=procedurePlans&date=${encodeURIComponent(date)}${ward ? `&ward=${encodeURIComponent(ward)}` : ""}`;
+  const raw = await fetchApi<{ rows?: ProcedurePlanRow[] }>(url);
+  return { rows: Array.isArray(raw?.rows) ? raw.rows : [] };
+}
+
+export async function addProcedurePlan(payload: {
+  code: string;
+  planDate: string;
+  ward: string;
+  bed?: string;
+  procedureKey: string;
+  procedureLabel?: string;
+  note?: string;
+}) {
+  return fetchApi("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "addProcedurePlan", ...payload }),
+  });
+}
+
+export async function markProcedurePlanDone(payload: {
+  code: string;
+  id: number;
+  doneDate: string;
+  addToProcedures?: boolean;
+}) {
+  return fetchApi("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "markProcedurePlanDone", ...payload }),
+  });
+}
+
 export async function addProcedure(payload: { code: string; date: string; procedureKey: string; procedureLabel?: string; count?: number; ward?: string }) {
   return fetchApi("/api/sheets", {
     method: "POST",

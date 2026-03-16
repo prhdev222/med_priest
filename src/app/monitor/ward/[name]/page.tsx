@@ -6,10 +6,12 @@ import {
   getStats,
   getIpdByWard,
   getProcedureStats,
+  getProcedurePlans,
   GroupBy,
   StatsResponse,
   IpdByWardRow,
   ProcedureStatsResponse,
+  ProcedurePlanRow,
   PROCEDURE_OPTIONS,
 } from "@/lib/api";
 import { localDateIso as localDateIsoFn, offsetDateIso } from "@/lib/date";
@@ -49,6 +51,8 @@ export default function MonitorWard() {
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [ipdRows, setIpdRows] = useState<IpdByWardRow[]>([]);
   const [procStats, setProcStats] = useState<ProcedureStatsResponse>({ rows: [], byProcedure: [] });
+  const [planToday, setPlanToday] = useState<ProcedurePlanRow[]>([]);
+  const [planTomorrow, setPlanTomorrow] = useState<ProcedurePlanRow[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [clock, setClock] = useState(new Date());
@@ -56,6 +60,7 @@ export default function MonitorWard() {
   const eveningDoneRef = useRef("");
 
   const todayKey = todayIso();
+  const tomorrowKey = offsetDateIso(1);
   // ใช้ช่วง 30 วันล่าสุดสำหรับตัวเลข Admit/D/C/AO “เดือนนี้” และหัตถการ
   const from = offsetDateIso(-30);
   const to = todayKey;
@@ -66,19 +71,23 @@ export default function MonitorWard() {
     if (!wardName) return;
     setRefreshing(true);
     try {
-      const [s, ipd, p] = await Promise.all([
+      const [s, ipd, p, pt, ptt] = await Promise.all([
         getStats(from, to, group),
         getIpdByWard(from, to, group),
         getProcedureStats(from, to, group, wardName),
+        getProcedurePlans(todayKey, wardName),
+        getProcedurePlans(tomorrowKey, wardName),
       ]);
       if (!mountRef.current) return;
       setStats(s);
       setIpdRows(Array.isArray(ipd?.rows) ? ipd.rows : []);
       setProcStats({ rows: p?.rows ?? [], byProcedure: p?.byProcedure ?? [] });
+      setPlanToday(Array.isArray(pt?.rows) ? pt.rows : []);
+      setPlanTomorrow(Array.isArray(ptt?.rows) ? ptt.rows : []);
       setLastUpdate(new Date());
     } catch { /* silent */ }
     finally { if (mountRef.current) setRefreshing(false); }
-  }, [from, to, wardName]);
+  }, [from, to, wardName, todayKey, tomorrowKey]);
 
   useEffect(() => {
     mountRef.current = true;
@@ -291,6 +300,62 @@ export default function MonitorWard() {
                     <span className="monitor-pie-val">{p.value}</span>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Planned Procedures (Today/Tomorrow) */}
+        {(planToday.length > 0 || planTomorrow.length > 0) && (
+          <div className="monitor-card monitor-chart-wide">
+            <h3 className="monitor-chart-label">แผนหัตถการ {wardName} (รายเตียง)</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 12, padding: 12 }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>วันนี้ ({todayKey})</div>
+                {planToday.length === 0 ? (
+                  <div style={{ color: "#94a3b8" }}>ไม่มีแผนวันนี้</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {planToday.map((r) => (
+                      <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 10px", borderRadius: 10, background: "#111827", border: "1px solid #1f2937" }}>
+                        <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
+                          <span style={{ fontWeight: 800, color: "#f59e0b" }}>เตียง {r.bed || "-"}</span>
+                          <span style={{ color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {r.procedureKey === "other"
+                              ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other")
+                              : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}
+                          </span>
+                        </div>
+                        <span style={{ fontWeight: 700, color: r.status === "done" ? "#22c55e" : "#94a3b8" }}>
+                          {r.status === "done" ? "ทำแล้ว" : "รอทำ"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 12, padding: 12 }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>พรุ่งนี้ ({tomorrowKey})</div>
+                {planTomorrow.length === 0 ? (
+                  <div style={{ color: "#94a3b8" }}>ไม่มีแผนพรุ่งนี้</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {planTomorrow.map((r) => (
+                      <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 10px", borderRadius: 10, background: "#111827", border: "1px solid #1f2937" }}>
+                        <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
+                          <span style={{ fontWeight: 800, color: "#fbbf24" }}>เตียง {r.bed || "-"}</span>
+                          <span style={{ color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {r.procedureKey === "other"
+                              ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other")
+                              : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}
+                          </span>
+                        </div>
+                        <span style={{ fontWeight: 700, color: "#94a3b8" }}>แผน</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           </div>

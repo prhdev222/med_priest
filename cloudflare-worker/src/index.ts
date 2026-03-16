@@ -173,6 +173,59 @@ async function getEncouragement(db: D1Database) {
   return { rows: r.results };
 }
 
+/** แผนหัตถการรายเตียง: ดึงตามวัน/ช่วงวัน และกรอง ward/status */
+async function getProcedurePlans(db: D1Database, params: URLSearchParams) {
+  const ward = params.get("ward") || "";
+  const date = params.get("date") || "";
+  const from = params.get("from") || "";
+  const to = params.get("to") || "";
+  const status = params.get("status") || "";
+
+  const where: string[] = [];
+  const binds: unknown[] = [];
+
+  if (date) {
+    where.push("plan_date = ?1");
+    binds.push(date);
+  } else {
+    if (!from || !to) throw new Error("date หรือ from/to ไม่ถูกต้อง");
+    where.push("plan_date BETWEEN ?1 AND ?2");
+    binds.push(from, to);
+  }
+
+  if (ward) {
+    where.push(`ward = ?${binds.length + 1}`);
+    binds.push(ward);
+  }
+  if (status) {
+    where.push(`status = ?${binds.length + 1}`);
+    binds.push(status);
+  }
+
+  const sql = `
+    SELECT
+      id,
+      plan_date as planDate,
+      ward,
+      bed,
+      procedure_key as procedureKey,
+      procedure_label as procedureLabel,
+      note,
+      status,
+      done_date as doneDate,
+      done_procedure_id as doneProcedureId,
+      created_at as createdAt,
+      updated_at as updatedAt
+    FROM procedure_plans
+    WHERE ${where.join(" AND ")}
+    ORDER BY plan_date, ward,
+      (CASE WHEN bed GLOB '*[0-9]*' THEN CAST(bed AS INTEGER) ELSE 9999 END),
+      bed, id DESC
+  `;
+  const r = await db.prepare(sql).bind(...binds).all();
+  return { rows: r.results };
+}
+
 async function getIpdOpenCases(db: D1Database) {
   const r = await db.prepare(
     `SELECT hn, ward, admit_date as admitDate FROM ipd_stays WHERE (stay_type = 'admit' OR stay_type IS NULL) AND (discharge_date = '' OR discharge_date IS NULL) ORDER BY admit_date DESC`
@@ -379,6 +432,70 @@ async function addProcedure(env: Env, body: Body) {
   return { ok: true };
 }
 
+async function addProcedurePlan(env: Env, body: Body) {
+  checkUnit(env, first(body.code, body.unitCode));
+  const planDate = first(body.planDate, body.date);
+  const ward = first(body.ward).slice(0, 50);
+  const bed = first(body.bed).slice(0, 20);
+  const procedureKey = first(body.procedureKey).slice(0, 100);
+  const procedureLabel = first(body.procedureLabel).slice(0, 200);
+  const note = first(body.note).slice(0, 300);
+  if (!planDate || !ward || !procedureKey) throw new Error("ข้อมูลไม่ครบ");
+
+  await env.DB.prepare(
+    `INSERT INTO procedure_plans (plan_date, ward, bed, procedure_key, procedure_label, note, status, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'planned', datetime('now'))`
+  ).bind(planDate, ward, bed, procedureKey, procedureLabel, note).run();
+
+  return { ok: true };
+}
+
+async function markProcedurePlanDone(env: Env, body: Body) {
+  checkUnit(env, first(body.code, body.unitCode));
+  const id = Number(body.id || 0);
+  const doneDate = first(body.doneDate);
+  const addToProcedures = String(body.addToProcedures ?? "true") !== "false";
+  if (!id || !doneDate) throw new Error("ข้อมูลไม่ครบ");
+
+  const plan = await env.DB.prepare(
+    `SELECT id, ward, procedure_key as procedureKey, procedure_label as procedureLabel, status, done_procedure_id as doneProcedureId
+     FROM procedure_plans WHERE id = ?1`
+  ).bind(id).first<{
+    id: number;
+    ward: string;
+    procedureKey: string;
+    procedureLabel: string;
+    status: string;
+    doneProcedureId: number | null;
+  }>();
+
+  if (!plan) throw new Error("ไม่พบแผนหัตถการ");
+  if (plan.status === "done") return { ok: true, procedureId: plan.doneProcedureId ?? null };
+
+  let procedureId: number | null = null;
+  if (addToProcedures) {
+    if (plan.doneProcedureId) {
+      procedureId = plan.doneProcedureId;
+    } else {
+      const ins = await env.DB.prepare(
+        `INSERT INTO procedures (date, procedure_key, procedure_label, count, ward) VALUES (?1, ?2, ?3, 1, ?4)`
+      ).bind(doneDate, plan.procedureKey, plan.procedureLabel || "", plan.ward || "").run();
+      procedureId = (ins.meta as { last_row_id?: number }).last_row_id ?? null;
+    }
+  }
+
+  await env.DB.prepare(
+    `UPDATE procedure_plans
+     SET status = 'done',
+         done_date = ?1,
+         done_procedure_id = COALESCE(done_procedure_id, ?2),
+         updated_at = datetime('now')
+     WHERE id = ?3`
+  ).bind(doneDate, procedureId, id).run();
+
+  return { ok: true, procedureId };
+}
+
 async function addIpdAdmit(env: Env, body: Body) {
   checkUnit(env, first(body.code));
   const stayType = first(body.stayType) || "admit";
@@ -561,6 +678,8 @@ export default {
             return json(await getIpdByWard(env.DB, p));
           case "procedureStats":
             return json(await getProcedureStats(env.DB, p));
+          case "procedurePlans":
+            return json(await getProcedurePlans(env.DB, p));
           case "activities":
             return json(await getActivities(env.DB));
           case "activitiesAdmin":
@@ -598,6 +717,10 @@ export default {
             return json(await addStatsRow(env, body));
           case "addProcedure":
             return json(await addProcedure(env, body));
+          case "addProcedurePlan":
+            return json(await addProcedurePlan(env, body));
+          case "markProcedurePlanDone":
+            return json(await markProcedurePlanDone(env, body));
           case "addIpdAdmit":
             return json(await addIpdAdmit(env, body));
           case "addIpdDischarge":
