@@ -393,7 +393,7 @@ export default function MonitorWard() {
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                       <span style={{ padding: "2px 8px", borderRadius: 999, background: color, color: "#0f172a", fontSize: "0.8rem", fontWeight: 700 }}>
-                        {label} {d.slice(5)}
+                        {label} {d.slice(8, 10)}-{d.slice(5, 7)}
                       </span>
                       <span style={{ fontWeight: 600, fontSize: "0.8rem", color: r.status === "done" ? "#22c55e" : "#94a3b8" }}>
                         {r.status === "done" ? "ทำแล้ว" : "แผน"}
