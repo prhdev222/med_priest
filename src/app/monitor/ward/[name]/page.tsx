@@ -171,6 +171,7 @@ export default function MonitorWard() {
   };
 
   const [visibleBlocks, setVisibleBlocks] = useState<Set<string>>(new Set(["summary", "ipd", "proc", "plan"]));
+  const [isFullscreen, setIsFullscreen] = useState(false);
   const toggleBlock = (key: string) => {
     setVisibleBlocks((prev) => {
       const next = new Set(prev);
@@ -187,6 +188,20 @@ export default function MonitorWard() {
       document.documentElement.requestFullscreen().catch(() => {});
     }
   };
+
+  useEffect(() => {
+    const handler = () => {
+      setIsFullscreen(!!document.fullscreenElement);
+    };
+    if (typeof document !== "undefined") {
+      document.addEventListener("fullscreenchange", handler);
+    }
+    return () => {
+      if (typeof document !== "undefined") {
+        document.removeEventListener("fullscreenchange", handler);
+      }
+    };
+  }, []);
 
   return (
     <div className="monitor-page">
@@ -205,38 +220,40 @@ export default function MonitorWard() {
         </div>
       </div>
 
-      {/* Filter toggles (ใต้แถบบนสุด) */}
-      <div style={{ padding: "10px 16px 0", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-        <span style={{ fontSize: "0.9rem", color: "#9ca3af" }}>ส่วนที่แสดง:</span>
-        <button
-          type="button"
-          className={`monitor-toggle-chip${visibleBlocks.has("summary") ? " active" : ""}`}
-          onClick={() => toggleBlock("summary")}
-        >
-          ตัวเลขสรุป
-        </button>
-        <button
-          type="button"
-          className={`monitor-toggle-chip${visibleBlocks.has("ipd") ? " active" : ""}`}
-          onClick={() => toggleBlock("ipd")}
-        >
-          IPD / D/C
-        </button>
-        <button
-          type="button"
-          className={`monitor-toggle-chip${visibleBlocks.has("proc") ? " active" : ""}`}
-          onClick={() => toggleBlock("proc")}
-        >
-          หัตถการ (สถิติ)
-        </button>
-        <button
-          type="button"
-          className={`monitor-toggle-chip${visibleBlocks.has("plan") ? " active" : ""}`}
-          onClick={() => toggleBlock("plan")}
-        >
-          แผนหัตถการ (รายเตียง)
-        </button>
-      </div>
+      {/* Filter toggles (ใต้แถบบนสุด) — ซ่อนเมื่อ Fullscreen */}
+      {!isFullscreen && (
+        <div style={{ padding: "10px 16px 0", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+          <span style={{ fontSize: "0.9rem", color: "#9ca3af" }}>ส่วนที่แสดง:</span>
+          <button
+            type="button"
+            className={`monitor-toggle-chip${visibleBlocks.has("summary") ? " active" : ""}`}
+            onClick={() => toggleBlock("summary")}
+          >
+            ตัวเลขสรุป
+          </button>
+          <button
+            type="button"
+            className={`monitor-toggle-chip${visibleBlocks.has("ipd") ? " active" : ""}`}
+            onClick={() => toggleBlock("ipd")}
+          >
+            IPD / D/C
+          </button>
+          <button
+            type="button"
+            className={`monitor-toggle-chip${visibleBlocks.has("proc") ? " active" : ""}`}
+            onClick={() => toggleBlock("proc")}
+          >
+            หัตถการ (สถิติ)
+          </button>
+          <button
+            type="button"
+            className={`monitor-toggle-chip${visibleBlocks.has("plan") ? " active" : ""}`}
+            onClick={() => toggleBlock("plan")}
+          >
+            แผนหัตถการ (รายเตียง)
+          </button>
+        </div>
+      )}
 
       <div className="monitor-grid monitor-grid-ward">
         {/* Big Numbers */}
