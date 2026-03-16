@@ -6,7 +6,7 @@ import {
   getStats,
   getIpdByWard,
   getProcedureStats,
-  getProcedurePlans,
+  getProcedurePlansRange,
   GroupBy,
   StatsResponse,
   IpdByWardRow,
@@ -51,8 +51,7 @@ export default function MonitorWard() {
   const [stats, setStats] = useState<StatsResponse | null>(null);
   const [ipdRows, setIpdRows] = useState<IpdByWardRow[]>([]);
   const [procStats, setProcStats] = useState<ProcedureStatsResponse>({ rows: [], byProcedure: [] });
-  const [planToday, setPlanToday] = useState<ProcedurePlanRow[]>([]);
-  const [planTomorrow, setPlanTomorrow] = useState<ProcedurePlanRow[]>([]);
+  const [planWeek, setPlanWeek] = useState<ProcedurePlanRow[]>([]);
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [clock, setClock] = useState(new Date());
@@ -60,7 +59,7 @@ export default function MonitorWard() {
   const eveningDoneRef = useRef("");
 
   const todayKey = todayIso();
-  const tomorrowKey = offsetDateIso(1);
+  const weekEndKey = offsetDateIso(6);
   // ใช้ช่วง 30 วันล่าสุดสำหรับตัวเลข Admit/D/C/AO “เดือนนี้” และหัตถการ
   const from = offsetDateIso(-30);
   const to = todayKey;
@@ -71,23 +70,21 @@ export default function MonitorWard() {
     if (!wardName) return;
     setRefreshing(true);
     try {
-      const [s, ipd, p, pt, ptt] = await Promise.all([
+      const [s, ipd, p, pw] = await Promise.all([
         getStats(from, to, group),
         getIpdByWard(from, to, group),
         getProcedureStats(from, to, group, wardName),
-        getProcedurePlans(todayKey, wardName),
-        getProcedurePlans(tomorrowKey, wardName),
+        getProcedurePlansRange(todayKey, weekEndKey, wardName),
       ]);
       if (!mountRef.current) return;
       setStats(s);
       setIpdRows(Array.isArray(ipd?.rows) ? ipd.rows : []);
       setProcStats({ rows: p?.rows ?? [], byProcedure: p?.byProcedure ?? [] });
-      setPlanToday(Array.isArray(pt?.rows) ? pt.rows : []);
-      setPlanTomorrow(Array.isArray(ptt?.rows) ? ptt.rows : []);
+      setPlanWeek(Array.isArray(pw?.rows) ? pw.rows : []);
       setLastUpdate(new Date());
     } catch { /* silent */ }
     finally { if (mountRef.current) setRefreshing(false); }
-  }, [from, to, wardName, todayKey, tomorrowKey]);
+  }, [from, to, wardName, todayKey, weekEndKey]);
 
   useEffect(() => {
     mountRef.current = true;
@@ -144,6 +141,37 @@ export default function MonitorWard() {
     const last14 = procStats.rows.slice(-14);
     return last14.map((r) => ({ label: String(r.key).slice(5), total: r.total ?? 0 }));
   }, [procStats.rows]);
+
+  const weekdayLabel = (d: string) => {
+    const dayIdx = getDayOfWeek(d); // 0=Sun..6=Sat
+    const map = ["อา", "จ", "อ", "พ", "พฤ", "ศ", "ส"];
+    return map[dayIdx] || "";
+  };
+
+  const weekdayColor = (d: string) => {
+    const dayIdx = getDayOfWeek(d);
+    switch (dayIdx) {
+      case 1: return "#eab308"; // จันทร์ เหลือง
+      case 2: return "#ec4899"; // อังคาร ชมพู
+      case 3: return "#22c55e"; // พุธ เขียว
+      case 4: return "#f97316"; // พฤ ส้ม
+      case 5: return "#3b82f6"; // ศุกร์ ฟ้า
+      case 6: return "#8b5cf6"; // เสาร์ ม่วง
+      case 0:
+      default:
+        return "#64748b"; // อาทิตย์ เทา/น้ำเงินอ่อน
+    }
+  };
+
+  const [visibleBlocks, setVisibleBlocks] = useState<Set<string>>(new Set(["ipd", "proc", "plan"]));
+  const toggleBlock = (key: string) => {
+    setVisibleBlocks((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
 
   const toggleFullscreen = () => {
     if (document.fullscreenElement) {
@@ -208,7 +236,36 @@ export default function MonitorWard() {
           <div className="monitor-big-sub">วัน</div>
         </div>
 
+        {/* Filter toggles */}
+        <div className="monitor-card" style={{ gridColumn: "1 / -1", padding: "10px 14px" }}>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+            <span style={{ fontSize: "0.9rem", color: "#9ca3af" }}>ส่วนที่แสดง:</span>
+            <button
+              type="button"
+              className={`monitor-toggle-chip${visibleBlocks.has("ipd") ? " active" : ""}`}
+              onClick={() => toggleBlock("ipd")}
+            >
+              IPD / D/C
+            </button>
+            <button
+              type="button"
+              className={`monitor-toggle-chip${visibleBlocks.has("proc") ? " active" : ""}`}
+              onClick={() => toggleBlock("proc")}
+            >
+              หัตถการ (สถิติ)
+            </button>
+            <button
+              type="button"
+              className={`monitor-toggle-chip${visibleBlocks.has("plan") ? " active" : ""}`}
+              onClick={() => toggleBlock("plan")}
+            >
+              แผนหัตถการ (รายเตียง)
+            </button>
+          </div>
+        </div>
+
         {/* IPD Admit/DC Chart */}
+        {visibleBlocks.has("ipd") && (
         <div className="monitor-card monitor-chart-wide">
           <h3 className="monitor-chart-label">Admit / D/C / A/O — {wardName} (14 วันล่าสุด) <span style={{ fontSize: "0.8rem", fontWeight: 400, color: "#64748b" }}>(จำนวนผู้ป่วยใน — ราย)</span></h3>
           <ResponsiveContainer width="100%" height="100%">
@@ -248,9 +305,10 @@ export default function MonitorWard() {
             </BarChart>
           </ResponsiveContainer>
         </div>
+        )}
 
         {/* Procedure Chart + Pie */}
-        {totalProc > 0 && (
+        {totalProc > 0 && visibleBlocks.has("proc") && (
           <div className="monitor-card monitor-chart-wide">
             <h3 className="monitor-chart-label">หัตถการ {wardName} ({totalProc} ครั้ง) <span style={{ fontSize: "0.8rem", fontWeight: 400, color: "#64748b" }}>(จำนวนหัตถการ — ครั้ง)</span></h3>
             <ResponsiveContainer width="100%" height="100%">
@@ -269,7 +327,7 @@ export default function MonitorWard() {
           </div>
         )}
 
-        {pieData.length > 0 && (
+        {pieData.length > 0 && visibleBlocks.has("proc") && (
           <div className="monitor-card monitor-chart-pie">
             <h3 className="monitor-chart-label">สัดส่วนหัตถการ {wardName}</h3>
             <div className="monitor-pie-wrap">
@@ -306,57 +364,35 @@ export default function MonitorWard() {
         )}
 
         {/* Planned Procedures (Today/Tomorrow) */}
-        {(planToday.length > 0 || planTomorrow.length > 0) && (
+        {planWeek.length > 0 && visibleBlocks.has("plan") && (
           <div className="monitor-card monitor-chart-wide">
-            <h3 className="monitor-chart-label">แผนหัตถการ {wardName} (รายเตียง)</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-              <div style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 12, padding: 12 }}>
-                <div style={{ fontWeight: 700, marginBottom: 8 }}>วันนี้ ({todayKey})</div>
-                {planToday.length === 0 ? (
-                  <div style={{ color: "#94a3b8" }}>ไม่มีแผนวันนี้</div>
-                ) : (
-                  <div style={{ display: "grid", gap: 8 }}>
-                    {planToday.map((r) => (
-                      <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 10px", borderRadius: 10, background: "#111827", border: "1px solid #1f2937" }}>
-                        <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
-                          <span style={{ fontWeight: 800, color: "#f59e0b" }}>เตียง {r.bed || "-"}</span>
-                          <span style={{ color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {r.procedureKey === "other"
-                              ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other")
-                              : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}
-                          </span>
-                        </div>
-                        <span style={{ fontWeight: 700, color: r.status === "done" ? "#22c55e" : "#94a3b8" }}>
-                          {r.status === "done" ? "ทำแล้ว" : "รอทำ"}
-                        </span>
-                      </div>
-                    ))}
+            <h3 className="monitor-chart-label">แผนหัตถการ {wardName} (สัปดาห์นี้, รายเตียง)</h3>
+            <div style={{ display: "grid", gap: 8 }}>
+              {planWeek.map((r) => {
+                const d = r.planDate || "";
+                const label = weekdayLabel(d);
+                const color = weekdayColor(d);
+                return (
+                  <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 10px", borderRadius: 10, background: "#111827", border: "1px solid #1f2937" }}>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
+                      <span style={{ fontWeight: 800, color: "#f59e0b" }}>เตียง {r.bed || "-"}</span>
+                      <span style={{ color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {r.procedureKey === "other"
+                          ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other")
+                          : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}
+                      </span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                      <span style={{ padding: "2px 8px", borderRadius: 999, background: color, color: "#0f172a", fontSize: "0.8rem", fontWeight: 700 }}>
+                        {label} {d.slice(5)}
+                      </span>
+                      <span style={{ fontWeight: 600, fontSize: "0.8rem", color: r.status === "done" ? "#22c55e" : "#94a3b8" }}>
+                        {r.status === "done" ? "ทำแล้ว" : "แผน"}
+                      </span>
+                    </div>
                   </div>
-                )}
-              </div>
-
-              <div style={{ background: "#0f172a", border: "1px solid #334155", borderRadius: 12, padding: 12 }}>
-                <div style={{ fontWeight: 700, marginBottom: 8 }}>พรุ่งนี้ ({tomorrowKey})</div>
-                {planTomorrow.length === 0 ? (
-                  <div style={{ color: "#94a3b8" }}>ไม่มีแผนพรุ่งนี้</div>
-                ) : (
-                  <div style={{ display: "grid", gap: 8 }}>
-                    {planTomorrow.map((r) => (
-                      <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 10px", borderRadius: 10, background: "#111827", border: "1px solid #1f2937" }}>
-                        <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
-                          <span style={{ fontWeight: 800, color: "#fbbf24" }}>เตียง {r.bed || "-"}</span>
-                          <span style={{ color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {r.procedureKey === "other"
-                              ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other")
-                              : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}
-                          </span>
-                        </div>
-                        <span style={{ fontWeight: 700, color: "#94a3b8" }}>แผน</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                );
+              })}
             </div>
           </div>
         )}

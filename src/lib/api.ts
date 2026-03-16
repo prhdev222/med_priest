@@ -410,6 +410,15 @@ export async function getProcedurePlans(date: string, ward?: string): Promise<{ 
   return { rows: Array.isArray(raw?.rows) ? raw.rows : [] };
 }
 
+export async function getProcedurePlansRange(from: string, to: string, ward?: string, status?: string): Promise<{ rows: ProcedurePlanRow[] }> {
+  const params = new URLSearchParams({ from, to });
+  if (ward) params.set("ward", ward);
+  if (status) params.set("status", status);
+  const url = `/api/sheets?action=procedurePlans&${params.toString()}`;
+  const raw = await fetchApi<{ rows?: ProcedurePlanRow[] }>(url);
+  return { rows: Array.isArray(raw?.rows) ? raw.rows : [] };
+}
+
 export async function addProcedurePlan(payload: {
   code: string;
   planDate: string;
