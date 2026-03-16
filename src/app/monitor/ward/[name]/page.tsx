@@ -163,7 +163,7 @@ export default function MonitorWard() {
     }
   };
 
-  const [visibleBlocks, setVisibleBlocks] = useState<Set<string>>(new Set(["ipd", "proc", "plan"]));
+  const [visibleBlocks, setVisibleBlocks] = useState<Set<string>>(new Set(["summary", "ipd", "proc", "plan"]));
   const toggleBlock = (key: string) => {
     setVisibleBlocks((prev) => {
       const next = new Set(prev);
@@ -198,8 +198,43 @@ export default function MonitorWard() {
         </div>
       </div>
 
+      {/* Filter toggles (ใต้แถบบนสุด) */}
+      <div style={{ padding: "10px 16px 0", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        <span style={{ fontSize: "0.9rem", color: "#9ca3af" }}>ส่วนที่แสดง:</span>
+        <button
+          type="button"
+          className={`monitor-toggle-chip${visibleBlocks.has("summary") ? " active" : ""}`}
+          onClick={() => toggleBlock("summary")}
+        >
+          ตัวเลขสรุป
+        </button>
+        <button
+          type="button"
+          className={`monitor-toggle-chip${visibleBlocks.has("ipd") ? " active" : ""}`}
+          onClick={() => toggleBlock("ipd")}
+        >
+          IPD / D/C
+        </button>
+        <button
+          type="button"
+          className={`monitor-toggle-chip${visibleBlocks.has("proc") ? " active" : ""}`}
+          onClick={() => toggleBlock("proc")}
+        >
+          หัตถการ (สถิติ)
+        </button>
+        <button
+          type="button"
+          className={`monitor-toggle-chip${visibleBlocks.has("plan") ? " active" : ""}`}
+          onClick={() => toggleBlock("plan")}
+        >
+          แผนหัตถการ (รายเตียง)
+        </button>
+      </div>
+
       <div className="monitor-grid monitor-grid-ward">
         {/* Big Numbers */}
+        {visibleBlocks.has("summary") && (
+        <>
         <div className="monitor-card monitor-big-num">
           <div className="monitor-big-label">Admit 7 วันล่าสุด</div>
           <div className="monitor-big-value" style={{ color: "#f59e0b" }}>{last7Admit}</div>
@@ -235,34 +270,8 @@ export default function MonitorWard() {
           <div className="monitor-big-value" style={{ color: "#e11d48" }}>{avgLos.toFixed(1)}</div>
           <div className="monitor-big-sub">วัน</div>
         </div>
-
-        {/* Filter toggles */}
-        <div className="monitor-card" style={{ gridColumn: "1 / -1", padding: "10px 14px" }}>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
-            <span style={{ fontSize: "0.9rem", color: "#9ca3af" }}>ส่วนที่แสดง:</span>
-            <button
-              type="button"
-              className={`monitor-toggle-chip${visibleBlocks.has("ipd") ? " active" : ""}`}
-              onClick={() => toggleBlock("ipd")}
-            >
-              IPD / D/C
-            </button>
-            <button
-              type="button"
-              className={`monitor-toggle-chip${visibleBlocks.has("proc") ? " active" : ""}`}
-              onClick={() => toggleBlock("proc")}
-            >
-              หัตถการ (สถิติ)
-            </button>
-            <button
-              type="button"
-              className={`monitor-toggle-chip${visibleBlocks.has("plan") ? " active" : ""}`}
-              onClick={() => toggleBlock("plan")}
-            >
-              แผนหัตถการ (รายเตียง)
-            </button>
-          </div>
-        </div>
+        </>
+        )}
 
         {/* IPD Admit/DC Chart */}
         {visibleBlocks.has("ipd") && (
