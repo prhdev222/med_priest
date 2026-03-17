@@ -29,6 +29,7 @@ import {
   getKnowledgeTags,
   upsertKnowledgeLink,
   upsertKnowledgeTag,
+  updateKnowledgeTag,
   setKnowledgeLinkTags,
   deleteKnowledgeLink,
 } from "@/lib/api";
@@ -78,6 +79,9 @@ export default function AdminPage() {
   const [kForm, setKForm] = useState({ title: "", url: "", description: "", icon: "🔗", isPinned: false, isActive: true });
   const [kSelectedTags, setKSelectedTags] = useState<number[]>([]);
   const [kNewTag, setKNewTag] = useState("");
+  const [kEditTagId, setKEditTagId] = useState<number | null>(null);
+  const [kEditTagName, setKEditTagName] = useState("");
+  const [kEditTagColor, setKEditTagColor] = useState("");
 
   // Patient tab
   const [ipdOpen, setIpdOpen] = useState<IpdOpenItem[]>([]);
@@ -1059,6 +1063,58 @@ export default function AdminPage() {
                   >
                     เพิ่มแท็ก
                   </button>
+                </div>
+
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px dashed var(--border)" }}>
+                  <div style={{ fontWeight: 700, marginBottom: 8 }}>แก้ไขแท็ก</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "flex-end" }}>
+                    <div className="field-group" style={{ minWidth: 220 }}>
+                      <label>เลือกแท็ก</label>
+                      <select
+                        value={kEditTagId ?? 0}
+                        onChange={(e) => {
+                          const id = Number(e.target.value) || 0;
+                          if (!id) { setKEditTagId(null); setKEditTagName(""); setKEditTagColor(""); return; }
+                          const t = kTags.find((x) => x.id === id);
+                          setKEditTagId(id);
+                          setKEditTagName(t?.name || "");
+                          setKEditTagColor(t?.color || "");
+                        }}
+                      >
+                        <option value={0}>-- เลือก --</option>
+                        {kTags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="field-group" style={{ minWidth: 220 }}>
+                      <label>ชื่อแท็ก</label>
+                      <input value={kEditTagName} onChange={(e) => setKEditTagName(e.target.value)} placeholder="ชื่อใหม่" />
+                    </div>
+                    <div className="field-group" style={{ width: 140 }}>
+                      <label>สี (ไม่บังคับ)</label>
+                      <input value={kEditTagColor} onChange={(e) => setKEditTagColor(e.target.value)} placeholder="#0ea5e9" />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn-sm"
+                      style={{ background: "#2563eb", color: "#fff", height: 42 }}
+                      disabled={!kEditTagId || !kEditTagName.trim()}
+                      onClick={async () => {
+                        if (!kEditTagId) return;
+                        try {
+                          setLoading(true);
+                          await updateKnowledgeTag({ code: adminCode, id: kEditTagId, name: kEditTagName.trim(), color: kEditTagColor.trim() || undefined });
+                          flash("แก้ไขแท็กสำเร็จ");
+                          await loadKnowledge();
+                        } catch (err) {
+                          setError((err as Error).message);
+                        } finally {
+                          setLoading(false);
+                        }
+                      }}
+                    >
+                      บันทึกแท็ก
+                    </button>
+                  </div>
                 </div>
               </div>
 

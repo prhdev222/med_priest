@@ -554,6 +554,14 @@ export async function upsertKnowledgeTag(payload: { code: string; name: string; 
   });
 }
 
+export async function updateKnowledgeTag(payload: { code: string; id: number; name: string; color?: string }) {
+  return fetchApi("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "updateKnowledgeTag", ...payload }),
+  });
+}
+
 export async function setKnowledgeLinkTags(payload: { code: string; linkId: number; tagIds: number[] }) {
   return fetchApi("/api/sheets", {
     method: "POST",

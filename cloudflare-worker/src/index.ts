@@ -370,6 +370,19 @@ async function upsertKnowledgeTag(env: Env, body: Body) {
   return { ok: true, changes: r.meta.changes ?? 0 };
 }
 
+async function updateKnowledgeTag(env: Env, body: Body) {
+  checkAdmin(env, first(body.code, body.adminCode));
+  const id = Number(body.id || 0);
+  const name = first(body.name).slice(0, 60);
+  const color = first(body.color).slice(0, 30);
+  if (!id || !name) throw new Error("ข้อมูลไม่ครบ (id, name)");
+  const r = await env.DB.prepare(
+    `UPDATE knowledge_tags SET name=?1, color=?2 WHERE id=?3`
+  ).bind(name, color, id).run();
+  if (r.meta.changes === 0) throw new Error("ไม่พบแท็กที่ต้องการแก้ไข");
+  return { ok: true };
+}
+
 async function setKnowledgeLinkTags(env: Env, body: Body) {
   checkAdmin(env, first(body.code, body.adminCode));
   const linkId = Number(body.linkId || 0);
@@ -1168,6 +1181,8 @@ export default {
             return json(await upsertKnowledgeLink(env, body));
           case "upsertKnowledgeTag":
             return json(await upsertKnowledgeTag(env, body));
+          case "updateKnowledgeTag":
+            return json(await updateKnowledgeTag(env, body));
           case "setKnowledgeLinkTags":
             return json(await setKnowledgeLinkTags(env, body));
           case "deleteKnowledgeLink":
