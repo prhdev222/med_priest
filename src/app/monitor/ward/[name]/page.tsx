@@ -7,6 +7,8 @@ import {
   getIpdByWard,
   getProcedureStats,
   getProcedurePlansRange,
+  getProcedurePlansDecrypted,
+  unlockWard,
   GroupBy,
   StatsResponse,
   IpdByWardRow,
@@ -55,6 +57,11 @@ export default function MonitorWard() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [clock, setClock] = useState(new Date());
+  const [unlockToken, setUnlockToken] = useState("");
+  const [planNameById, setPlanNameById] = useState<Record<number, string>>({});
+  const [pinOpen, setPinOpen] = useState(false);
+  const [pinVal, setPinVal] = useState("");
+  const [pinErr, setPinErr] = useState("");
   const mountRef = useRef(true);
   const eveningDoneRef = useRef("");
 
@@ -82,9 +89,43 @@ export default function MonitorWard() {
       setProcStats({ rows: p?.rows ?? [], byProcedure: p?.byProcedure ?? [] });
       setPlanWeek(Array.isArray(pw?.rows) ? pw.rows : []);
       setLastUpdate(new Date());
+
+      // ถ้าเคยปลดล็อกไว้ ให้ดึงชื่อ (ช่วงสัปดาห์นี้) ใหม่ทุกครั้งที่รีเฟรช
+      if (unlockToken && (wardName === "MED1" || wardName === "MED2")) {
+        try {
+          const dec = await getProcedurePlansDecrypted({ code: wardName, ward: wardName, from: todayKey, to: weekEndKey, token: unlockToken });
+          const map: Record<number, string> = {};
+          for (const r of dec.rows) map[r.id] = String((r as { patientName?: string }).patientName || "");
+          if (mountRef.current) setPlanNameById(map);
+        } catch {
+          if (mountRef.current) { setUnlockToken(""); setPlanNameById({}); }
+        }
+      }
     } catch { /* silent */ }
     finally { if (mountRef.current) setRefreshing(false); }
-  }, [from, to, wardName, todayKey, weekEndKey]);
+  }, [from, to, wardName, todayKey, weekEndKey, unlockToken]);
+
+  const doUnlock = useCallback(async (pin: string) => {
+    if (!(wardName === "MED1" || wardName === "MED2")) return;
+    const p = String(pin || "").trim();
+    if (!p) return;
+    setPinErr("");
+    try {
+      const res = await unlockWard({ code: wardName, ward: wardName, pin: p });
+      if (!res.token) return;
+      setUnlockToken(res.token);
+      const dec = await getProcedurePlansDecrypted({ code: wardName, ward: wardName, from: todayKey, to: weekEndKey, token: res.token });
+      const map: Record<number, string> = {};
+      for (const r of dec.rows) map[r.id] = String((r as { patientName?: string }).patientName || "");
+      setPlanNameById(map);
+      setPinOpen(false);
+      setPinVal("");
+    } catch {
+      setUnlockToken("");
+      setPlanNameById({});
+      setPinErr("PIN ไม่ถูกต้อง หรือหมดอายุ");
+    }
+  }, [todayKey, wardName, weekEndKey]);
 
   useEffect(() => {
     mountRef.current = true;
@@ -220,6 +261,77 @@ export default function MonitorWard() {
           <button className="monitor-refresh-btn" onClick={fetchAll} disabled={refreshing} title="รีเฟรชข้อมูล">
             <span className={refreshing ? "monitor-spin" : ""}>&#x21bb;</span> {refreshing ? "กำลังโหลด..." : "Refresh"}
           </button>
+          {(wardName === "MED1" || wardName === "MED2") && (
+            <div style={{ position: "relative", display: "flex", alignItems: "center", gap: 8 }}>
+              <button
+                className="monitor-refresh-btn"
+                onClick={() => { setPinOpen((v) => !v); setPinErr(""); }}
+                title={unlockToken ? "ปลดล็อกแล้ว (ชื่อจะแสดงเฉพาะวันนี้)" : "ใส่ PIN เพื่อแสดงชื่อ"}
+                style={{ borderColor: unlockToken ? "#16a34a" : "#334155", color: unlockToken ? "#86efac" : undefined }}
+              >
+                {unlockToken ? "🔓 ชื่อ" : "🔒 PIN"}
+              </button>
+
+              {pinOpen && (
+                <div style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "calc(100% + 8px)",
+                  background: "#0b1220",
+                  border: "1px solid #334155",
+                  borderRadius: 12,
+                  padding: 10,
+                  minWidth: 220,
+                  boxShadow: "0 16px 40px rgba(0,0,0,0.35)",
+                  zIndex: 50,
+                }}>
+                  <div style={{ fontSize: "0.85rem", color: "#cbd5e1", fontWeight: 700, marginBottom: 6 }}>
+                    ใส่ PIN ({wardName})
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input
+                      type="password"
+                      value={pinVal}
+                      onChange={(e) => setPinVal(e.target.value)}
+                      placeholder="PIN"
+                      style={{
+                        width: 110,
+                        padding: "8px 10px",
+                        borderRadius: 10,
+                        border: "1px solid #334155",
+                        background: "#111827",
+                        color: "#e2e8f0",
+                        outline: "none",
+                        fontFamily: "inherit",
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") doUnlock(pinVal);
+                        if (e.key === "Escape") { setPinOpen(false); setPinErr(""); }
+                      }}
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      className="monitor-refresh-btn"
+                      onClick={() => doUnlock(pinVal)}
+                      style={{ padding: "8px 12px" }}
+                      title="ปลดล็อก"
+                    >
+                      แสดง
+                    </button>
+                  </div>
+                  {pinErr && (
+                    <div style={{ marginTop: 6, color: "#fca5a5", fontSize: "0.8rem", fontWeight: 700 }}>
+                      {pinErr}
+                    </div>
+                  )}
+                  <div style={{ marginTop: 6, color: "#64748b", fontSize: "0.75rem" }}>
+                    ชื่อจะแสดงเฉพาะ “หัตถการวันนี้”
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <span className="monitor-clock">{fmtTime(clock)}</span>
           <span className="monitor-date">{todayIso()}</span>
           <button className="monitor-fs-btn" onClick={toggleFullscreen} title="เต็มจอ">⛶</button>
@@ -337,6 +449,11 @@ export default function MonitorWard() {
                       เตียง {r.bed || "-"}
                     </span>
                     <div style={{ flex: 1, minWidth: 0 }}>
+                      {!!planNameById[r.id] && (
+                        <div style={{ fontWeight: 800, fontSize: "1.05rem", color: "#e2e8f0", marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {planNameById[r.id]}
+                        </div>
+                      )}
                       <div style={{
                         fontWeight: 700, fontSize: "1rem",
                         color: isDone ? "#86efac" : "#fde68a",
@@ -429,7 +546,7 @@ export default function MonitorWard() {
 
         {/* IPD Admit/DC Chart */}
         {visibleBlocks.has("ipd") && (
-        <div className="monitor-card monitor-chart-wide">
+        <div className="monitor-card monitor-chart-wide monitor-chart-full">
           <h3 className="monitor-chart-label">Admit / D/C / A/O — {wardName} (14 วันล่าสุด) <span style={{ fontSize: "0.8rem", fontWeight: 400, color: "#64748b" }}>(จำนวนผู้ป่วยใน — ราย)</span></h3>
           <ResponsiveContainer width="100%" height="100%">
             <BarChart data={chartRows} margin={{ top: 24, right: 12, left: -8, bottom: 4 }}>
@@ -528,7 +645,7 @@ export default function MonitorWard() {
 
         {/* Planned Procedures (Today/Tomorrow) */}
         {planWeek.length > 0 && visibleBlocks.has("plan") && (
-          <div className="monitor-card monitor-chart-wide">
+          <div className="monitor-card monitor-chart-wide monitor-chart-full">
             <h3 className="monitor-chart-label">แผนหัตถการ {wardName} (สัปดาห์นี้, รายเตียง)</h3>
             <div style={{ display: "grid", gap: 8 }}>
               {planWeek.map((r) => {
@@ -539,11 +656,18 @@ export default function MonitorWard() {
                   <div key={r.id} style={{ display: "flex", justifyContent: "space-between", gap: 10, padding: "8px 10px", borderRadius: 10, background: "#111827", border: "1px solid #1f2937" }}>
                     <div style={{ display: "flex", gap: 10, alignItems: "center", minWidth: 0 }}>
                       <span style={{ fontWeight: 800, color: "#f59e0b" }}>เตียง {r.bed || "-"}</span>
-                      <span style={{ color: "#e2e8f0", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        {r.procedureKey === "other"
-                          ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other")
-                          : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}
-                      </span>
+                      <div style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 2 }}>
+                        {!!planNameById[r.id] && (
+                          <span style={{ color: "#e2e8f0", fontWeight: 800, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                            {planNameById[r.id]}
+                          </span>
+                        )}
+                        <span style={{ color: "#cbd5e1", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {r.procedureKey === "other"
+                            ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other")
+                            : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}
+                        </span>
+                      </div>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
                       <span style={{ padding: "2px 8px", borderRadius: 999, background: color, color: "#0f172a", fontSize: "0.8rem", fontWeight: 700 }}>

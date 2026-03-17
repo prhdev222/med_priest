@@ -75,6 +75,16 @@ CREATE TABLE IF NOT EXISTS procedure_plans (
   updated_at       TEXT DEFAULT (datetime('now'))
 );
 
+-- PDPA: ข้อมูลคนไข้สำหรับ "แผนหัตถการ" (เก็บแบบเข้ารหัสเท่านั้น และลบทิ้งเมื่อทำแล้ว/ไม่ได้ทำ)
+CREATE TABLE IF NOT EXISTS procedure_plan_patients (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  plan_id    INTEGER NOT NULL UNIQUE,
+  hn_enc     TEXT DEFAULT '',
+  name_enc   TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now')),
+  FOREIGN KEY (plan_id) REFERENCES procedure_plans(id) ON DELETE CASCADE
+);
+
 -- Discharge Plan: Fit D/C date, Actual D/C, Delay reason (สำหรับ DIV KPI)
 CREATE TABLE IF NOT EXISTS discharge_plans (
   id                   INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -110,6 +120,7 @@ CREATE INDEX IF NOT EXISTS idx_procedures_ward ON procedures(ward);
 CREATE INDEX IF NOT EXISTS idx_proc_plans_date ON procedure_plans(plan_date);
 CREATE INDEX IF NOT EXISTS idx_proc_plans_ward ON procedure_plans(ward);
 CREATE INDEX IF NOT EXISTS idx_proc_plans_status ON procedure_plans(status);
+CREATE INDEX IF NOT EXISTS idx_proc_plan_patients_plan_id ON procedure_plan_patients(plan_id);
 CREATE INDEX IF NOT EXISTS idx_discharge_plans_actual ON discharge_plans(actual_discharge_date);
 CREATE INDEX IF NOT EXISTS idx_ward_beds_date ON ward_beds(date);
 CREATE INDEX IF NOT EXISTS idx_ward_beds_ward ON ward_beds(ward);

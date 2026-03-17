@@ -2587,8 +2587,9 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
   flex: 1;
   display: grid;
   gap: 16px;
-  padding: 20px 28px;
-  overflow: auto;
+  padding: 16px 16px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .monitor-grid-opd {
@@ -2599,6 +2600,11 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
 .monitor-grid-ward {
   grid-template-columns: repeat(3, 1fr);
   grid-auto-rows: auto;
+}
+
+/* Card เต็มความกว้างใน grid (ใช้กับกราฟ / แผนหัตถการ) */
+.monitor-chart-full {
+  grid-column: 1 / -1;
 }
 
 .monitor-card {
@@ -2640,14 +2646,14 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
 
 .monitor-chart-wide {
   grid-column: span 2;
-  min-height: 280px;
+  min-height: 340px;
   display: flex;
   flex-direction: column;
 }
 
 .monitor-chart-wide .recharts-responsive-container {
   flex: 1;
-  min-height: 220px;
+  min-height: 280px;
 }
 
 .monitor-chart-pie {

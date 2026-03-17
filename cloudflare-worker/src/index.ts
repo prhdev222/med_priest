@@ -2,6 +2,10 @@ interface Env {
   DB: D1Database;
   UNIT_CODE: string;
   ADMIN_CODE: string;
+  ENC_KEY_B64: string; // base64 32 bytes (AES-256-GCM)
+  UNLOCK_SECRET: string; // HMAC secret for short-lived tokens
+  PIN_MED1: string;
+  PIN_MED2: string;
 }
 
 type Body = Record<string, unknown>;
@@ -17,12 +21,88 @@ function json(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: CORS });
 }
 
+function b64ToBytes(b64: string): Uint8Array {
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+function bytesToB64(bytes: Uint8Array): string {
+  let s = "";
+  for (let i = 0; i < bytes.length; i++) s += String.fromCharCode(bytes[i]);
+  return btoa(s);
+}
+
+async function aesKey(env: Env): Promise<CryptoKey> {
+  const raw = b64ToBytes(first(env.ENC_KEY_B64));
+  if (raw.length !== 32) throw new Error("ENC_KEY_B64 ไม่ถูกต้อง (ต้องเป็น base64 ของ 32 bytes)");
+  return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+}
+
+async function encryptText(env: Env, plaintext: string): Promise<string> {
+  const t = String(plaintext ?? "").trim();
+  if (!t) return "";
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await aesKey(env);
+  const enc = new TextEncoder().encode(t);
+  const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, enc));
+  // packed as iv.ciphertext (both base64)
+  return `${bytesToB64(iv)}.${bytesToB64(ct)}`;
+}
+
+async function decryptText(env: Env, packed: string): Promise<string> {
+  const s = String(packed ?? "").trim();
+  if (!s) return "";
+  const [ivB64, ctB64] = s.split(".");
+  if (!ivB64 || !ctB64) return "";
+  const iv = b64ToBytes(ivB64);
+  const ct = b64ToBytes(ctB64);
+  const key = await aesKey(env);
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
+  return new TextDecoder().decode(pt);
+}
+
+async function hmacKey(env: Env): Promise<CryptoKey> {
+  const secret = first(env.UNLOCK_SECRET);
+  if (!secret) throw new Error("UNLOCK_SECRET ยังไม่ได้ตั้งค่า");
+  const raw = new TextEncoder().encode(secret);
+  return crypto.subtle.importKey("raw", raw, { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+}
+
+function nowSec() { return Math.floor(Date.now() / 1000); }
+
+async function signToken(env: Env, payload: Record<string, unknown>): Promise<string> {
+  const key = await hmacKey(env);
+  const body = bytesToB64(new TextEncoder().encode(JSON.stringify(payload)));
+  const sigBytes = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(body)));
+  const sig = bytesToB64(sigBytes);
+  return `${body}.${sig}`;
+}
+
+async function verifyToken(env: Env, token: string): Promise<Record<string, unknown> | null> {
+  const t = String(token ?? "").trim();
+  const [body, sig] = t.split(".");
+  if (!body || !sig) return null;
+  const key = await hmacKey(env);
+  const ok = await crypto.subtle.verify("HMAC", key, b64ToBytes(sig), new TextEncoder().encode(body));
+  if (!ok) return null;
+  const jsonStr = new TextDecoder().decode(b64ToBytes(body));
+  const payload = JSON.parse(jsonStr) as Record<string, unknown>;
+  const exp = Number(payload.exp || 0);
+  if (!exp || nowSec() > exp) return null;
+  return payload;
+}
+
 function checkUnit(env: Env, code: string) {
   if (!code || code !== env.UNIT_CODE) throw new Error("unit code ไม่ถูกต้อง");
 }
 
 function checkAdmin(env: Env, code: string) {
   if (!code || code !== env.ADMIN_CODE) throw new Error("admin code ไม่ถูกต้อง");
+}
+
+function checkStaff(env: Env, code: string) {
+  if (!code || (code !== env.UNIT_CODE && code !== env.ADMIN_CODE)) throw new Error("code ไม่ถูกต้อง");
 }
 
 function first(...args: unknown[]): string {
@@ -226,6 +306,66 @@ async function getProcedurePlans(db: D1Database, params: URLSearchParams) {
   `;
   const r = await db.prepare(sql).bind(...binds).all();
   return { rows: r.results };
+}
+
+/** แผนหัตถการ + ชื่อ/HN (ถอดรหัส) สำหรับ staff/admin เท่านั้น */
+async function getProcedurePlansAdmin(env: Env, params: URLSearchParams) {
+  checkStaff(env, first(params.get("code"), params.get("unitCode"), params.get("adminCode")));
+  const ward = params.get("ward") || "";
+  const date = params.get("date") || "";
+  const from = params.get("from") || "";
+  const to = params.get("to") || "";
+
+  const binds: unknown[] = [];
+  const where: string[] = [];
+
+  if (date) {
+    where.push("p.plan_date = ?1");
+    binds.push(date);
+  } else {
+    if (!from || !to) throw new Error("date หรือ from/to ไม่ถูกต้อง");
+    where.push("p.plan_date BETWEEN ?1 AND ?2");
+    binds.push(from, to);
+  }
+
+  if (ward) {
+    where.push(`p.ward = ?${binds.length + 1}`);
+    binds.push(ward);
+  }
+  where.push("p.status <> 'cancelled'");
+
+  const sql = `
+    SELECT
+      p.id,
+      p.plan_date as planDate,
+      p.ward,
+      p.bed,
+      p.procedure_key as procedureKey,
+      p.procedure_label as procedureLabel,
+      p.note,
+      p.status,
+      p.done_date as doneDate,
+      p.done_procedure_id as doneProcedureId,
+      p.created_at as createdAt,
+      p.updated_at as updatedAt,
+      pp.hn_enc as hnEnc,
+      pp.name_enc as nameEnc
+    FROM procedure_plans p
+    LEFT JOIN procedure_plan_patients pp ON pp.plan_id = p.id
+    WHERE ${where.join(" AND ")}
+    ORDER BY p.plan_date, p.ward,
+      (CASE WHEN p.bed GLOB '*[0-9]*' THEN CAST(p.bed AS INTEGER) ELSE 9999 END),
+      p.bed, p.id DESC
+  `;
+  const r = await env.DB.prepare(sql).bind(...binds).all<{ hnEnc?: string; nameEnc?: string }>();
+
+  const rows = [];
+  for (const row of r.results) {
+    const patientHn = row.hnEnc ? await decryptText(env, row.hnEnc) : "";
+    const patientName = row.nameEnc ? await decryptText(env, row.nameEnc) : "";
+    rows.push({ ...row, patientHn, patientName, hnEnc: undefined, nameEnc: undefined });
+  }
+  return { rows };
 }
 
 async function getIpdOpenCases(db: D1Database) {
@@ -442,14 +582,111 @@ async function addProcedurePlan(env: Env, body: Body) {
   const procedureKey = first(body.procedureKey).slice(0, 100);
   const procedureLabel = first(body.procedureLabel).slice(0, 200);
   const note = first(body.note).slice(0, 300);
+  const hn = first(body.hn).slice(0, 50);
+  const name = first(body.name).slice(0, 200);
   if (!planDate || !ward || !procedureKey) throw new Error("ข้อมูลไม่ครบ");
 
-  await env.DB.prepare(
+  const ins = await env.DB.prepare(
     `INSERT INTO procedure_plans (plan_date, ward, bed, procedure_key, procedure_label, note, status, updated_at)
      VALUES (?1, ?2, ?3, ?4, ?5, ?6, 'planned', datetime('now'))`
   ).bind(planDate, ward, bed, procedureKey, procedureLabel, note).run();
 
+  const planId = (ins.meta as { last_row_id?: number }).last_row_id ?? null;
+  if (planId && (hn || name)) {
+    const hnEnc = hn ? await encryptText(env, hn) : "";
+    const nameEnc = name ? await encryptText(env, name) : "";
+    await env.DB.prepare(
+      `INSERT INTO procedure_plan_patients (plan_id, hn_enc, name_enc) VALUES (?1, ?2, ?3)
+       ON CONFLICT(plan_id) DO UPDATE SET hn_enc=excluded.hn_enc, name_enc=excluded.name_enc, created_at=datetime('now')`
+    ).bind(planId, hnEnc, nameEnc).run();
+  }
+
   return { ok: true };
+}
+
+async function updateProcedurePlan(env: Env, body: Body) {
+  checkStaff(env, first(body.code, body.unitCode, body.adminCode));
+  const id = Number(body.id || 0);
+  if (!id) throw new Error("ข้อมูลไม่ครบ");
+
+  const bed = first(body.bed).slice(0, 20);
+  const hn = first(body.hn).slice(0, 50);
+  const name = first(body.name).slice(0, 200);
+
+  const r = await env.DB.prepare(
+    `UPDATE procedure_plans SET bed=?1, updated_at=datetime('now') WHERE id=?2 AND status <> 'done'`
+  ).bind(bed, id).run();
+  if (r.meta.changes === 0) throw new Error("ไม่พบแผนหัตถการหรือทำไปแล้ว (ทำแล้วไม่สามารถแก้ไขได้)");
+
+  if (hn || name) {
+    const hnEnc = hn ? await encryptText(env, hn) : "";
+    const nameEnc = name ? await encryptText(env, name) : "";
+    await env.DB.prepare(
+      `INSERT INTO procedure_plan_patients (plan_id, hn_enc, name_enc) VALUES (?1, ?2, ?3)
+       ON CONFLICT(plan_id) DO UPDATE SET hn_enc=excluded.hn_enc, name_enc=excluded.name_enc, created_at=datetime('now')`
+    ).bind(id, hnEnc, nameEnc).run();
+  } else {
+    await env.DB.prepare(`DELETE FROM procedure_plan_patients WHERE plan_id=?1`).bind(id).run();
+  }
+
+  return { ok: true };
+}
+
+async function unlockWard(env: Env, body: Body) {
+  const ward = first(body.ward).slice(0, 50);
+  const pin = first(body.pin);
+  if (!ward || !pin) throw new Error("ข้อมูลไม่ครบ");
+  const expected = ward === "MED1" ? first(env.PIN_MED1) : ward === "MED2" ? first(env.PIN_MED2) : "";
+  if (!expected || pin !== expected) throw new Error("PIN ไม่ถูกต้อง");
+
+  const token = await signToken(env, { ward, exp: nowSec() + 60 * 10 }); // 10 นาที
+  return { ok: true, token, expiresInSec: 600 };
+}
+
+async function procedurePlansDecrypted(env: Env, body: Body) {
+  const token = first(body.token);
+  const ward = first(body.ward).slice(0, 50);
+  const from = first(body.from);
+  const to = first(body.to);
+  if (!token || !ward || !from || !to) throw new Error("ข้อมูลไม่ครบ");
+
+  const payload = await verifyToken(env, token);
+  if (!payload || String(payload.ward || "") !== ward) throw new Error("ยังไม่ได้ปลดล็อกหรือหมดอายุ");
+
+  const sql = `
+    SELECT
+      p.id,
+      p.plan_date as planDate,
+      p.ward,
+      p.bed,
+      p.procedure_key as procedureKey,
+      p.procedure_label as procedureLabel,
+      p.note,
+      p.status,
+      p.done_date as doneDate,
+      p.done_procedure_id as doneProcedureId,
+      p.created_at as createdAt,
+      p.updated_at as updatedAt,
+      pp.name_enc as nameEnc
+    FROM procedure_plans p
+    LEFT JOIN procedure_plan_patients pp ON pp.plan_id = p.id
+    WHERE p.plan_date BETWEEN ?1 AND ?2
+      AND p.ward = ?3
+      AND p.status <> 'cancelled'
+    ORDER BY p.plan_date, p.ward,
+      (CASE WHEN p.bed GLOB '*[0-9]*' THEN CAST(p.bed AS INTEGER) ELSE 9999 END),
+      p.bed, p.id DESC
+  `;
+  const r = await env.DB.prepare(sql).bind(from, to, ward).all<{
+    nameEnc?: string;
+  }>();
+
+  const rows = [];
+  for (const row of r.results) {
+    const namePlain = row.nameEnc ? await decryptText(env, row.nameEnc) : "";
+    rows.push({ ...row, patientName: namePlain, nameEnc: undefined });
+  }
+  return { rows };
 }
 
 async function markProcedurePlanDone(env: Env, body: Body) {
@@ -495,6 +732,9 @@ async function markProcedurePlanDone(env: Env, body: Body) {
      WHERE id = ?3`
   ).bind(doneDate, procedureId, id).run();
 
+  // PDPA: ลบข้อมูลคนไข้ที่เข้ารหัสทันทีเมื่อทำแล้ว
+  await env.DB.prepare(`DELETE FROM procedure_plan_patients WHERE plan_id = ?1`).bind(id).run();
+
   return { ok: true, procedureId };
 }
 
@@ -508,6 +748,9 @@ async function cancelProcedurePlan(env: Env, body: Body) {
     `UPDATE procedure_plans SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?1 AND status <> 'done'`
   ).bind(id).run();
   if (r.meta.changes === 0) throw new Error("ไม่พบแผนหัตถการหรือทำไปแล้ว (ทำแล้วไม่สามารถยกเลิกได้)");
+
+  // PDPA: ลบข้อมูลคนไข้ที่เข้ารหัสทันทีเมื่อสรุปว่าไม่ได้ทำ
+  await env.DB.prepare(`DELETE FROM procedure_plan_patients WHERE plan_id = ?1`).bind(id).run();
   return { ok: true };
 }
 
@@ -695,6 +938,8 @@ export default {
             return json(await getProcedureStats(env.DB, p));
           case "procedurePlans":
             return json(await getProcedurePlans(env.DB, p));
+          case "procedurePlansAdmin":
+            return json(await getProcedurePlansAdmin(env, p));
           case "activities":
             return json(await getActivities(env.DB));
           case "activitiesAdmin":
@@ -734,6 +979,12 @@ export default {
             return json(await addProcedure(env, body));
           case "addProcedurePlan":
             return json(await addProcedurePlan(env, body));
+          case "updateProcedurePlan":
+            return json(await updateProcedurePlan(env, body));
+          case "unlockWard":
+            return json(await unlockWard(env, body));
+          case "procedurePlansDecrypted":
+            return json(await procedurePlansDecrypted(env, body));
           case "markProcedurePlanDone":
             return json(await markProcedurePlanDone(env, body));
           case "cancelProcedurePlan":

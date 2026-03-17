@@ -5,10 +5,11 @@ import { FormEvent, useState, useCallback, useMemo, useEffect } from "react";
 import {
   addIpdAdmit, addIpdDischarge, addStatsRow, addProcedure,
   addProcedurePlan, getProcedurePlans, markProcedurePlanDone, cancelProcedurePlan,
+  getProcedurePlansAdmin, updateProcedurePlan,
   getIpdOpenCases, getTodayEntries, updateTodayRow, deleteTodayRow,
   getWardBeds, upsertWardBed,
   IpdOpenCase, OpdAdminItem, ErAdminItem, ConsultAdminItem, IpdAdminItem, ProcedureAdminItem,
-  ProcedurePlanRow,
+  ProcedurePlanRow, ProcedurePlanAdminRow,
   PROCEDURE_OPTIONS, DELAY_REASON_OPTIONS, DischargePlanPayload,
 } from "@/lib/api";
 
@@ -117,10 +118,16 @@ export default function DataEntryPage() {
   const [planProcKey, setPlanProcKey] = useState("");
   const [planProcLabelOther, setPlanProcLabelOther] = useState("");
   const [planNote, setPlanNote] = useState("");
-  const [planTodayRows, setPlanTodayRows] = useState<ProcedurePlanRow[]>([]);
-  const [planTomorrowRows, setPlanTomorrowRows] = useState<ProcedurePlanRow[]>([]);
+  const [planHn, setPlanHn] = useState("");
+  const [planName, setPlanName] = useState("");
+  const [planTodayRows, setPlanTodayRows] = useState<ProcedurePlanAdminRow[]>([]);
+  const [planTomorrowRows, setPlanTomorrowRows] = useState<ProcedurePlanAdminRow[]>([]);
   const [planDoneDate, setPlanDoneDate] = useState(todayIso());
   const [planLoading, setPlanLoading] = useState(false);
+  const [editPlanId, setEditPlanId] = useState<number | null>(null);
+  const [ePlanBed, setEPlanBed] = useState("");
+  const [ePlanHn, setEPlanHn] = useState("");
+  const [ePlanName, setEPlanName] = useState("");
   const [editOpdId, setEditOpdId] = useState<number | null>(null);
   const [editOpdVal, setEditOpdVal] = useState(0);
   const [editErId, setEditErId] = useState<number | null>(null);
@@ -351,8 +358,10 @@ export default function DataEntryPage() {
         procedureKey: planProcKey,
         procedureLabel: planProcKey === "other" ? otherLabel : undefined,
         note: planNote.trim() || undefined,
+        hn: planHn.trim() || undefined,
+        name: planName.trim() || undefined,
       });
-      setPlanBed(""); setPlanProcKey(""); setPlanProcLabelOther(""); setPlanNote("");
+      setPlanBed(""); setPlanProcKey(""); setPlanProcLabelOther(""); setPlanNote(""); setPlanHn(""); setPlanName("");
       flash("บันทึกแผนหัตถการสำเร็จ");
       await loadPlanLists(planWard);
     } catch (error) { flash((error as Error).message, "error"); }
@@ -378,6 +387,23 @@ export default function DataEntryPage() {
       await cancelProcedurePlan({ code, id });
       flash("ยกเลิกแผนและลบออกจากระบบแล้ว");
       await Promise.all([loadPlanLists(planWard), loadToday(code)]);
+    } catch (error) { flash((error as Error).message, "error"); }
+  }
+
+  async function doEditPlanStart(r: ProcedurePlanAdminRow) {
+    setEditPlanId(r.id);
+    setEPlanBed(String(r.bed || ""));
+    setEPlanHn(String(r.patientHn || ""));
+    setEPlanName(String(r.patientName || ""));
+  }
+
+  async function doEditPlanSave() {
+    if (!planWard || editPlanId === null) return;
+    try {
+      await updateProcedurePlan({ code, id: editPlanId, bed: ePlanBed.trim(), hn: ePlanHn.trim() || undefined, name: ePlanName.trim() || undefined });
+      setEditPlanId(null);
+      flash("แก้ไขแผนสำเร็จ");
+      await loadPlanLists(planWard);
     } catch (error) { flash((error as Error).message, "error"); }
   }
 
@@ -496,8 +522,8 @@ export default function DataEntryPage() {
     setPlanLoading(true);
     try {
       const [t1, t2] = await Promise.all([
-        getProcedurePlans(todayIso(), ward),
-        getProcedurePlans(tomorrowIso(), ward),
+        getProcedurePlansAdmin(code, todayIso(), ward),
+        getProcedurePlansAdmin(code, tomorrowIso(), ward),
       ]);
       setPlanTodayRows(Array.isArray(t1?.rows) ? t1.rows : []);
       setPlanTomorrowRows(Array.isArray(t2?.rows) ? t2.rows : []);
@@ -507,7 +533,7 @@ export default function DataEntryPage() {
     } finally {
       setPlanLoading(false);
     }
-  }, []);
+  }, [code]);
 
   useEffect(() => {
     if (!unlocked) return;
@@ -867,6 +893,10 @@ export default function DataEntryPage() {
               <div className="field-group"><label>วันที่ (แผน)</label><input type="date" value={planDate} onChange={(e) => setPlanDate(e.target.value)} required /></div>
               <div className="field-group"><label>เตียง</label><input placeholder="เช่น 3, 5A" value={planBed} onChange={(e) => setPlanBed(e.target.value)} required /></div>
             </div>
+            <div className="field-grid-2">
+              <div className="field-group"><label>HN (ซ่อนใน Monitor)</label><input placeholder="เช่น 123456" value={planHn} onChange={(e) => setPlanHn(e.target.value)} /></div>
+              <div className="field-group"><label>ชื่อคนไข้ (แสดงเมื่อใส่ PIN ใน Monitor)</label><input placeholder="เช่น พระมหาสมชาย" value={planName} onChange={(e) => setPlanName(e.target.value)} /></div>
+            </div>
             <div className="field-group">
               <label>หัตถการ</label>
               <select value={planProcKey} onChange={(e) => setPlanProcKey(e.target.value)} required>
@@ -897,9 +927,25 @@ export default function DataEntryPage() {
               planTomorrowRows.map((r) => (
                 <div key={r.id} className="de-row-item">
                   <span className="de-row-badge" style={{ background: "#f59e0b" }}>Plan</span>
-                  <span><strong>เตียง {r.bed || "-"}</strong></span>
-                  <span>{r.procedureKey === "other" ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other") : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}</span>
-                  {r.note && <span style={{ color: "var(--muted)" }}>{r.note}</span>}
+                  {editPlanId === r.id ? (
+                    <>
+                      <span><strong>เตียง</strong></span>
+                      <input style={{ width: 80 }} value={ePlanBed} onChange={(e) => setEPlanBed(e.target.value)} />
+                      <span style={{ minWidth: 0 }}>{r.procedureKey === "other" ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other") : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}</span>
+                      <input style={{ width: 120 }} placeholder="HN" value={ePlanHn} onChange={(e) => setEPlanHn(e.target.value)} />
+                      <input style={{ flex: "1 1 200px" }} placeholder="ชื่อ" value={ePlanName} onChange={(e) => setEPlanName(e.target.value)} />
+                      <button type="button" className="btn-sm" onClick={doEditPlanSave} style={{ background: "#2563eb" }}>💾 บันทึก</button>
+                      <button type="button" className="btn-sm btn-secondary" onClick={() => setEditPlanId(null)}>ยกเลิก</button>
+                    </>
+                  ) : (
+                    <>
+                      <span><strong>เตียง {r.bed || "-"}</strong></span>
+                      <span>{r.procedureKey === "other" ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other") : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}</span>
+                      {r.patientName && <span style={{ color: "var(--muted)" }}>ชื่อ: {r.patientName}</span>}
+                      {r.note && <span style={{ color: "var(--muted)" }}>{r.note}</span>}
+                      <button type="button" className="btn-sm btn-edit" onClick={() => doEditPlanStart(r)}>แก้ไข</button>
+                    </>
+                  )}
                 </div>
               ))
             )}
@@ -921,8 +967,24 @@ export default function DataEntryPage() {
                   <span className="de-row-badge" style={{ background: r.status === "done" ? "#16a34a" : "#f59e0b" }}>
                     {r.status === "done" ? "Done" : "Plan"}
                   </span>
-                  <span><strong>เตียง {r.bed || "-"}</strong></span>
-                  <span>{r.procedureKey === "other" ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other") : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}</span>
+                  {editPlanId === r.id ? (
+                    <>
+                      <span><strong>เตียง</strong></span>
+                      <input style={{ width: 80 }} value={ePlanBed} onChange={(e) => setEPlanBed(e.target.value)} />
+                      <span style={{ minWidth: 0 }}>{r.procedureKey === "other" ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other") : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}</span>
+                      <input style={{ width: 120 }} placeholder="HN" value={ePlanHn} onChange={(e) => setEPlanHn(e.target.value)} />
+                      <input style={{ flex: "1 1 200px" }} placeholder="ชื่อ" value={ePlanName} onChange={(e) => setEPlanName(e.target.value)} />
+                      <button type="button" className="btn-sm" onClick={doEditPlanSave} style={{ background: "#2563eb" }}>💾 บันทึก</button>
+                      <button type="button" className="btn-sm btn-secondary" onClick={() => setEditPlanId(null)}>ยกเลิก</button>
+                    </>
+                  ) : (
+                    <>
+                      <span><strong>เตียง {r.bed || "-"}</strong></span>
+                      <span>{r.procedureKey === "other" ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other") : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}</span>
+                      {r.patientName && <span style={{ color: "var(--muted)" }}>ชื่อ: {r.patientName}</span>}
+                      <button type="button" className="btn-sm btn-edit" onClick={() => doEditPlanStart(r)}>แก้ไข</button>
+                    </>
+                  )}
                   {r.status === "done" ? (
                     <span style={{ color: "#16a34a", fontWeight: 600 }}>ทำแล้ว ({r.doneDate || "-"})</span>
                   ) : (

@@ -10,13 +10,16 @@ import {
   IpdAdminItem,
   IpdOpenItem,
   ProcedureAdminItem,
+  ProcedurePlanAdminRow,
   PROCEDURE_OPTIONS,
   addActivity,
   deleteRow,
   getActivitiesAdmin,
   getEncouragementAdmin,
   getPatientDataAdmin,
+  getProcedurePlansAdmin,
   updateRow,
+  updateProcedurePlan,
 } from "@/lib/api";
 import LoadingOverlay from "@/components/LoadingOverlay";
 
@@ -41,6 +44,8 @@ export default function AdminPage() {
   const [searchCon, setSearchCon] = useState<ConsultAdminItem[]>([]);
   const [searchIpd, setSearchIpd] = useState<IpdAdminItem[]>([]);
   const [searchProcedures, setSearchProcedures] = useState<ProcedureAdminItem[]>([]);
+  const [searchPlansWard, setSearchPlansWard] = useState<"MED1" | "MED2">("MED1");
+  const [searchPlans, setSearchPlans] = useState<ProcedurePlanAdminRow[]>([]);
   const [searched, setSearched] = useState(false);
 
   // Activity form
@@ -60,6 +65,10 @@ export default function AdminPage() {
   const [eErForm, setEErForm] = useState({ date: "", count: 0 });
   const [editCon, setEditCon] = useState<ConsultAdminItem | null>(null);
   const [eConForm, setEConForm] = useState({ date: "", count: 0 });
+
+  // Procedure plan edit (PDPA)
+  const [editPlan, setEditPlan] = useState<ProcedurePlanAdminRow | null>(null);
+  const [ePlanForm, setEPlanForm] = useState({ bed: "", hn: "", name: "" });
 
   const [showIpdOpen, setShowIpdOpen] = useState(true);
   const [filterWard, setFilterWard] = useState("__all__");
@@ -94,7 +103,24 @@ export default function AdminPage() {
       setSearchIpd(p.ipd || []);
       setSearchProcedures(p.procedures || []);
       setIpdOpen(p.ipdOpen || []);
+      const plans = await getProcedurePlansAdmin(adminCode, searchDate, searchPlansWard);
+      setSearchPlans(plans.rows || []);
       setSearched(true);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function reloadPlansOnly() {
+    if (!searchDate) return;
+    setLoading(true);
+    setError("");
+    try {
+      const plans = await getProcedurePlansAdmin(adminCode, searchDate, searchPlansWard);
+      setSearchPlans(plans.rows || []);
+      flash("โหลดแผนหัตถการสำเร็จ");
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -191,6 +217,28 @@ export default function AdminPage() {
       await updateRow({ code: adminCode, sheetType: "consult", rowId: String(editCon.id), ...eConForm });
       setEditCon(null); flash("แก้ไข Consult สำเร็จ"); await doSearch();
     } catch (err) { setError((err as Error).message); setLoading(false); }
+  }
+
+  async function savePlanEdit(e: FormEvent) {
+    e.preventDefault();
+    if (!editPlan) return;
+    try {
+      setLoading(true);
+      await updateProcedurePlan({
+        code: adminCode,
+        id: editPlan.id,
+        bed: ePlanForm.bed,
+        hn: ePlanForm.hn || undefined,
+        name: ePlanForm.name || undefined,
+      });
+      setEditPlan(null);
+      flash("แก้ไขแผนหัตถการสำเร็จ");
+      await reloadPlansOnly();
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
   }
 
   /* ─── Activity handlers ─── */
@@ -576,6 +624,79 @@ export default function AdminPage() {
                             ))}
                           </tbody>
                         </table>
+                      </>
+                    )}
+
+                    {/* แผนหัตถการ (แก้เตียง/ชื่อ/HN) */}
+                    {searchDate && (
+                      <>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10, marginTop: 18 }}>
+                          <h3 style={{ margin: 0 }}>📋 แผนหัตถการ ({searchPlansWard}) — {searchDate}</h3>
+                          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                            <select value={searchPlansWard} onChange={(e) => setSearchPlansWard(e.target.value as "MED1" | "MED2")} style={{ height: 36 }}>
+                              <option value="MED1">MED1</option>
+                              <option value="MED2">MED2</option>
+                            </select>
+                            <button type="button" className="btn-sm btn-secondary" onClick={reloadPlansOnly}>รีเฟรชแผน</button>
+                          </div>
+                        </div>
+
+                        {editPlan && (
+                          <form onSubmit={savePlanEdit} className="admin-form" style={{ marginTop: 10, marginBottom: 10, padding: 12, background: "var(--surface-soft)", borderRadius: 10, border: "1px solid var(--border)" }}>
+                            <div style={{ fontWeight: 700, marginBottom: 8 }}>✏️ แก้ไขแผน #{editPlan.id} ({editPlan.ward} / {editPlan.planDate})</div>
+                            <div className="field-grid-2">
+                              <div className="field-group"><label>เตียง</label><input value={ePlanForm.bed} onChange={(e) => setEPlanForm({ ...ePlanForm, bed: e.target.value })} required /></div>
+                              <div className="field-group"><label>HN (ไม่แสดงใน Monitor)</label><input value={ePlanForm.hn} onChange={(e) => setEPlanForm({ ...ePlanForm, hn: e.target.value })} /></div>
+                            </div>
+                            <div className="field-group"><label>ชื่อคนไข้ (แสดงเมื่อใส่ PIN ใน Monitor)</label><input value={ePlanForm.name} onChange={(e) => setEPlanForm({ ...ePlanForm, name: e.target.value })} /></div>
+                            <div className="admin-form-actions">
+                              <button type="submit">💾 บันทึก</button>
+                              <button type="button" className="btn-secondary" onClick={() => setEditPlan(null)}>ยกเลิก</button>
+                            </div>
+                          </form>
+                        )}
+
+                        {searchPlans.length === 0 ? (
+                          <p className="admin-empty" style={{ marginTop: 10 }}>ยังไม่มีแผนหัตถการของ {searchPlansWard} วันที่ {searchDate}</p>
+                        ) : (
+                          <table style={{ marginTop: 10 }}>
+                            <thead>
+                              <tr>
+                                <th>ID</th>
+                                <th>เตียง</th>
+                                <th>ชื่อ (ถอดรหัส)</th>
+                                <th>หัตถการ</th>
+                                <th>สถานะ</th>
+                                <th>จัดการ</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {searchPlans.map((r) => (
+                                <tr key={r.id}>
+                                  <td>{r.id}</td>
+                                  <td><strong>{r.bed || "-"}</strong></td>
+                                  <td>{r.patientName || "—"}</td>
+                                  <td>{r.procedureKey === "other" ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other") : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}</td>
+                                  <td>{r.status}</td>
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="btn-sm btn-edit"
+                                      onClick={() => {
+                                        setEditPlan(r);
+                                        setEPlanForm({ bed: r.bed || "", hn: r.patientHn || "", name: r.patientName || "" });
+                                      }}
+                                      disabled={r.status === "done"}
+                                      title={r.status === "done" ? "ทำแล้วแก้ไขไม่ได้" : "แก้ไขเตียง/ชื่อ/HN"}
+                                    >
+                                      แก้ไข
+                                    </button>
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        )}
                       </>
                     )}
                   </>

@@ -410,6 +410,14 @@ export async function getProcedurePlans(date: string, ward?: string): Promise<{ 
   return { rows: Array.isArray(raw?.rows) ? raw.rows : [] };
 }
 
+export type ProcedurePlanAdminRow = ProcedurePlanRow & { patientHn?: string; patientName?: string };
+
+export async function getProcedurePlansAdmin(code: string, date: string, ward?: string): Promise<{ rows: ProcedurePlanAdminRow[] }> {
+  const url = `/api/sheets?action=procedurePlansAdmin&code=${encodeURIComponent(code)}&date=${encodeURIComponent(date)}${ward ? `&ward=${encodeURIComponent(ward)}` : ""}`;
+  const raw = await fetchApi<{ rows?: ProcedurePlanAdminRow[] }>(url);
+  return { rows: Array.isArray(raw?.rows) ? raw.rows : [] };
+}
+
 export async function getProcedurePlansRange(from: string, to: string, ward?: string, status?: string): Promise<{ rows: ProcedurePlanRow[] }> {
   const params = new URLSearchParams({ from, to });
   if (ward) params.set("ward", ward);
@@ -427,12 +435,40 @@ export async function addProcedurePlan(payload: {
   procedureKey: string;
   procedureLabel?: string;
   note?: string;
+  hn?: string;
+  name?: string;
 }) {
   return fetchApi("/api/sheets", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "addProcedurePlan", ...payload }),
   });
+}
+
+export async function updateProcedurePlan(payload: { code: string; id: number; bed: string; hn?: string; name?: string }) {
+  return fetchApi("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "updateProcedurePlan", ...payload }),
+  });
+}
+
+export async function unlockWard(payload: { code?: string; ward: string; pin: string }) {
+  const raw = await fetchApi<{ ok?: boolean; token?: string; expiresInSec?: number }>("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "unlockWard", ...payload }),
+  });
+  return { token: String(raw?.token || ""), expiresInSec: Number(raw?.expiresInSec || 0) };
+}
+
+export async function getProcedurePlansDecrypted(payload: { code?: string; ward: string; from: string; to: string; token: string }): Promise<{ rows: (ProcedurePlanRow & { patientName?: string })[] }> {
+  const raw = await fetchApi<{ rows?: (ProcedurePlanRow & { patientName?: string })[] }>("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "procedurePlansDecrypted", ...payload }),
+  });
+  return { rows: Array.isArray(raw?.rows) ? raw.rows : [] };
 }
 
 export async function markProcedurePlanDone(payload: {
