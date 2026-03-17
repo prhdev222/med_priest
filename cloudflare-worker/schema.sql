@@ -124,3 +124,37 @@ CREATE INDEX IF NOT EXISTS idx_proc_plan_patients_plan_id ON procedure_plan_pati
 CREATE INDEX IF NOT EXISTS idx_discharge_plans_actual ON discharge_plans(actual_discharge_date);
 CREATE INDEX IF NOT EXISTS idx_ward_beds_date ON ward_beds(date);
 CREATE INDEX IF NOT EXISTS idx_ward_beds_ward ON ward_beds(ward);
+
+-- ========================================
+-- Knowledge Hub (คลังความรู้): Links + Tags
+-- ========================================
+
+CREATE TABLE IF NOT EXISTS knowledge_links (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  title       TEXT NOT NULL,
+  url         TEXT NOT NULL,
+  description TEXT DEFAULT '',
+  icon        TEXT DEFAULT '',
+  is_pinned   INTEGER NOT NULL DEFAULT 0,
+  is_active   INTEGER NOT NULL DEFAULT 1,
+  created_at  TEXT DEFAULT (datetime('now')),
+  updated_at  TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_tags (
+  id         INTEGER PRIMARY KEY AUTOINCREMENT,
+  name       TEXT NOT NULL UNIQUE,
+  color      TEXT DEFAULT '',
+  created_at TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_link_tags (
+  link_id INTEGER NOT NULL,
+  tag_id  INTEGER NOT NULL,
+  PRIMARY KEY (link_id, tag_id),
+  FOREIGN KEY (link_id) REFERENCES knowledge_links(id) ON DELETE CASCADE,
+  FOREIGN KEY (tag_id) REFERENCES knowledge_tags(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_knowledge_links_active ON knowledge_links(is_active, is_pinned, updated_at);
+CREATE INDEX IF NOT EXISTS idx_knowledge_link_tags_tag ON knowledge_link_tags(tag_id);

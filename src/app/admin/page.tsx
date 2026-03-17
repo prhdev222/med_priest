@@ -23,10 +23,18 @@ import {
   markProcedurePlanDone,
   cancelProcedurePlan,
   deleteProcedurePlan,
+  KnowledgeLinkRow,
+  KnowledgeTagRow,
+  getKnowledgeLinks,
+  getKnowledgeTags,
+  upsertKnowledgeLink,
+  upsertKnowledgeTag,
+  setKnowledgeLinkTags,
+  deleteKnowledgeLink,
 } from "@/lib/api";
 import LoadingOverlay from "@/components/LoadingOverlay";
 
-type Tab = "patients" | "activities" | "encouragement" | "sheets";
+type Tab = "patients" | "activities" | "encouragement" | "knowledge" | "sheets";
 const wards = ["MED1", "MED2", "IMC", "Palliative", "ward90", "ICU"];
 
 export default function AdminPage() {
@@ -38,6 +46,17 @@ export default function AdminPage() {
   const [tab, setTab] = useState<Tab>("patients");
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [encouragement, setEncouragement] = useState<EncouragementItem[]>([]);
+
+  // Knowledge tab
+  const [kLinks, setKLinks] = useState<KnowledgeLinkRow[]>([]);
+  const [kTags, setKTags] = useState<KnowledgeTagRow[]>([]);
+  const [kFilterQ, setKFilterQ] = useState("");
+  const [kFilterTag, setKFilterTag] = useState(0);
+  const [kIncludeInactive, setKIncludeInactive] = useState(false);
+  const [kEditing, setKEditing] = useState<KnowledgeLinkRow | null>(null);
+  const [kForm, setKForm] = useState({ title: "", url: "", description: "", icon: "🔗", isPinned: false, isActive: true });
+  const [kSelectedTags, setKSelectedTags] = useState<number[]>([]);
+  const [kNewTag, setKNewTag] = useState("");
 
   // Patient tab
   const [ipdOpen, setIpdOpen] = useState<IpdOpenItem[]>([]);
@@ -95,6 +114,23 @@ export default function AdminPage() {
     }
   }
 
+  async function loadKnowledge() {
+    setLoading(true);
+    setError("");
+    try {
+      const [t, l] = await Promise.all([
+        getKnowledgeTags(),
+        getKnowledgeLinks({ q: kFilterQ.trim() || undefined, tag: kFilterTag || undefined, includeInactive: kIncludeInactive }),
+      ]);
+      setKTags(t.rows || []);
+      setKLinks(l.rows || []);
+    } catch (err) {
+      setError((err as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
   async function doSearch() {
     if (!searchDate) return;
     setLoading(true);
@@ -139,6 +175,13 @@ export default function AdminPage() {
       loadBase(adminCode).catch((err) => setError((err as Error).message));
     }
   }, [unlocked]);
+
+  useEffect(() => {
+    if (unlocked && tab === "knowledge") {
+      loadKnowledge();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unlocked, tab, kFilterTag, kIncludeInactive]);
 
   function flash(msg: string) { setSuccess(msg); setTimeout(() => setSuccess(""), 3000); }
 
@@ -324,6 +367,7 @@ export default function AdminPage() {
     { key: "patients", label: "ข้อมูลผู้ป่วย", icon: "🏥", desc: "ค้นหาตามวันที่ / จัดการ HN", count: ipdOpen.length },
     { key: "activities", label: "กิจกรรม", icon: "📋", desc: "จัดการหน้ากิจกรรม", count: activities.length },
     { key: "encouragement", label: "ให้กำลังใจ", icon: "💬", desc: "จัดการหน้าบอร์ดให้กำลังใจ", count: encouragement.length },
+    { key: "knowledge", label: "คลังความรู้", icon: "📚", desc: "เพิ่ม/แท็ก/ปักหมุดลิงก์ความรู้", count: kLinks.length },
     { key: "sheets", label: "จัดการข้อมูลภายนอก", icon: "📑", desc: "ลิงก์จัดการข้อมูลภายนอก", count: GOOGLE_SHEETS.length + 1 },
   ];
 
@@ -846,6 +890,208 @@ export default function AdminPage() {
                   <div key={m.id} className="admin-list-item">
                     <div className="admin-list-info"><span className="admin-list-date">{m.date}</span><span className="admin-list-name">{m.name || "ไม่ระบุชื่อ"}</span><span className="admin-list-message">&ldquo;{m.message}&rdquo;</span></div>
                     <div className="admin-list-actions"><button className="btn-sm btn-edit" onClick={() => startEditEnc(m)}>แก้ไข</button><button className="btn-sm btn-delete" onClick={() => removeEnc(m.id)}>ลบ</button></div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ═══ Tab: คลังความรู้ ═══ */}
+      {tab === "knowledge" && (
+        <div className="admin-panel">
+          <div className="admin-card">
+            <h2 className="admin-card-title">📚 คลังความรู้</h2>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+              <div className="field-group" style={{ flex: "1 1 260px" }}>
+                <label>ค้นหา</label>
+                <input value={kFilterQ} onChange={(e) => setKFilterQ(e.target.value)} placeholder="ค้นจาก title/description" />
+              </div>
+              <div className="field-group" style={{ minWidth: 200 }}>
+                <label>แท็ก</label>
+                <select value={kFilterTag} onChange={(e) => setKFilterTag(Number(e.target.value) || 0)}>
+                  <option value={0}>ทั้งหมด</option>
+                  {kTags.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, height: 42, color: "var(--muted)" }}>
+                <input type="checkbox" checked={kIncludeInactive} onChange={(e) => setKIncludeInactive(e.target.checked)} style={{ width: 16, height: 16 }} />
+                รวมที่ซ่อน
+              </label>
+              <button type="button" className="btn-sm" style={{ background: "#2563eb", color: "#fff", height: 42 }} onClick={loadKnowledge}>
+                โหลด/ค้นหา
+              </button>
+              <button
+                type="button"
+                className="btn-sm btn-secondary"
+                style={{ height: 42 }}
+                onClick={() => {
+                  setKEditing(null);
+                  setKForm({ title: "", url: "", description: "", icon: "🔗", isPinned: false, isActive: true });
+                  setKSelectedTags([]);
+                }}
+              >
+                + เพิ่มลิงก์
+              </button>
+            </div>
+          </div>
+
+          <div className="admin-card">
+            <h2 className="admin-card-title">{kEditing ? `✏️ แก้ไขลิงก์ #${kEditing.id}` : "➕ เพิ่ม/แก้ไขลิงก์"}</h2>
+            <form
+              className="admin-form"
+              onSubmit={async (e) => {
+                e.preventDefault();
+                try {
+                  setLoading(true);
+                  const res = await upsertKnowledgeLink({
+                    code: adminCode,
+                    id: kEditing?.id,
+                    title: kForm.title,
+                    url: kForm.url,
+                    description: kForm.description,
+                    icon: kForm.icon,
+                    isPinned: kForm.isPinned,
+                    isActive: kForm.isActive,
+                  });
+                  const savedId = (kEditing?.id ?? (res as { id?: number }).id) as number | undefined;
+                  if (savedId) await setKnowledgeLinkTags({ code: adminCode, linkId: savedId, tagIds: kSelectedTags });
+                  flash("บันทึกลิงก์สำเร็จ");
+                  setKEditing(null);
+                  await loadKnowledge();
+                } catch (err) {
+                  setError((err as Error).message);
+                } finally {
+                  setLoading(false);
+                }
+              }}
+            >
+              <div className="field-grid-2">
+                <div className="field-group"><label>ชื่อ</label><input value={kForm.title} onChange={(e) => setKForm({ ...kForm, title: e.target.value })} required /></div>
+                <div className="field-group"><label>URL</label><input value={kForm.url} onChange={(e) => setKForm({ ...kForm, url: e.target.value })} required /></div>
+              </div>
+              <div className="field-grid-2">
+                <div className="field-group"><label>ไอคอน (emoji)</label><input value={kForm.icon} onChange={(e) => setKForm({ ...kForm, icon: e.target.value })} /></div>
+                <div className="field-group"><label>คำอธิบาย</label><input value={kForm.description} onChange={(e) => setKForm({ ...kForm, description: e.target.value })} /></div>
+              </div>
+              <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={kForm.isPinned} onChange={(e) => setKForm({ ...kForm, isPinned: e.target.checked })} style={{ width: 16, height: 16 }} />
+                  ปักหมุด
+                </label>
+                <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <input type="checkbox" checked={kForm.isActive} onChange={(e) => setKForm({ ...kForm, isActive: e.target.checked })} style={{ width: 16, height: 16 }} />
+                  แสดงผล
+                </label>
+              </div>
+
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontWeight: 700, marginBottom: 8 }}>แท็ก</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {kTags.map((t) => {
+                    const on = kSelectedTags.includes(t.id);
+                    return (
+                      <button
+                        key={t.id}
+                        type="button"
+                        className={`btn-sm${on ? "" : " btn-secondary"}`}
+                        style={on ? { background: "#0ea5e9", color: "#fff" } : undefined}
+                        onClick={() => setKSelectedTags((prev) => on ? prev.filter((x) => x !== t.id) : [...prev, t.id])}
+                      >
+                        {t.name}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+                  <div className="field-group" style={{ minWidth: 220 }}>
+                    <label>เพิ่มแท็กใหม่</label>
+                    <input value={kNewTag} onChange={(e) => setKNewTag(e.target.value)} placeholder="พิมพ์ชื่อ tag แล้วกดเพิ่ม" />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-sm"
+                    style={{ background: "#16a34a", color: "#fff", height: 42 }}
+                    onClick={async () => {
+                      const name = kNewTag.trim();
+                      if (!name) return;
+                      try {
+                        setLoading(true);
+                        await upsertKnowledgeTag({ code: adminCode, name });
+                        setKNewTag("");
+                        await loadKnowledge();
+                        flash("เพิ่มแท็กสำเร็จ");
+                      } catch (err) {
+                        setError((err as Error).message);
+                      } finally {
+                        setLoading(false);
+                      }
+                    }}
+                  >
+                    เพิ่มแท็ก
+                  </button>
+                </div>
+              </div>
+
+              <div className="admin-form-actions">
+                <button type="submit">💾 บันทึก</button>
+                {kEditing && (
+                  <button type="button" className="btn-secondary" onClick={() => setKEditing(null)}>
+                    ยกเลิก
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+
+          <div className="admin-card">
+            <h2 className="admin-card-title">รายการลิงก์ ({kLinks.length})</h2>
+            {kLinks.length === 0 ? (
+              <p className="admin-empty">ยังไม่มีลิงก์</p>
+            ) : (
+              <div className="admin-list">
+                {kLinks.map((l) => (
+                  <div key={l.id} className="admin-list-item">
+                    <div className="admin-list-info" style={{ gap: 10 }}>
+                      <span className="admin-list-badge">{l.icon || "🔗"}</span>
+                      <span className="admin-list-title" style={{ minWidth: 0 }}>{l.title}</span>
+                      <a href={l.url} target="_blank" rel="noopener noreferrer" style={{ color: "var(--muted)", fontSize: "0.85rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 340 }}>
+                        {l.url}
+                      </a>
+                      {l.isPinned ? <span style={{ color: "#f59e0b", fontWeight: 700 }}>📌</span> : null}
+                      {l.isActive ? null : <span style={{ color: "#b91c1c", fontWeight: 700 }}>ซ่อน</span>}
+                    </div>
+                    <div className="admin-list-actions">
+                      <button
+                        className="btn-sm btn-edit"
+                        onClick={() => {
+                          setKEditing(l);
+                          setKForm({ title: l.title, url: l.url, description: l.description || "", icon: l.icon || "🔗", isPinned: !!l.isPinned, isActive: !!l.isActive });
+                          setKSelectedTags((l.tags || []).map((t) => t.id));
+                        }}
+                      >
+                        แก้ไข
+                      </button>
+                      <button
+                        className="btn-sm btn-delete"
+                        onClick={async () => {
+                          if (!confirm("ลบลิงก์นี้ถาวร?")) return;
+                          try {
+                            setLoading(true);
+                            await deleteKnowledgeLink({ code: adminCode, id: l.id });
+                            flash("ลบสำเร็จ");
+                            await loadKnowledge();
+                          } catch (err) {
+                            setError((err as Error).message);
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                      >
+                        ลบ
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>

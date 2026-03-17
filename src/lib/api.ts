@@ -501,6 +501,75 @@ export async function deleteProcedurePlan(payload: { code: string; id: number })
   });
 }
 
+// ─── Knowledge hub (คลังความรู้) ──────────────────────────
+
+export interface KnowledgeTagRow {
+  id: number;
+  name: string;
+  color: string;
+  createdAt: string;
+}
+
+export interface KnowledgeLinkRow {
+  id: number;
+  title: string;
+  url: string;
+  description: string;
+  icon: string;
+  isPinned: number;
+  isActive: number;
+  createdAt: string;
+  updatedAt: string;
+  tags: { id: number; name: string; color: string }[];
+}
+
+export async function getKnowledgeTags(): Promise<{ rows: KnowledgeTagRow[] }> {
+  const raw = await fetchApi<{ rows?: KnowledgeTagRow[] }>("/api/sheets?action=knowledgeTags");
+  return { rows: Array.isArray(raw?.rows) ? raw.rows : [] };
+}
+
+export async function getKnowledgeLinks(params?: { q?: string; tag?: number; pinned?: boolean; includeInactive?: boolean }): Promise<{ rows: KnowledgeLinkRow[] }> {
+  const sp = new URLSearchParams({ action: "knowledgeLinks" });
+  if (params?.q) sp.set("q", params.q);
+  if (params?.tag) sp.set("tag", String(params.tag));
+  if (params?.pinned) sp.set("pinned", "1");
+  if (params?.includeInactive) sp.set("includeInactive", "1");
+  const raw = await fetchApi<{ rows?: KnowledgeLinkRow[] }>(`/api/sheets?${sp.toString()}`);
+  return { rows: Array.isArray(raw?.rows) ? raw.rows : [] };
+}
+
+export async function upsertKnowledgeLink(payload: { code: string; id?: number; title: string; url: string; description?: string; icon?: string; isPinned?: boolean; isActive?: boolean }) {
+  return fetchApi("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "upsertKnowledgeLink", ...payload }),
+  });
+}
+
+export async function upsertKnowledgeTag(payload: { code: string; name: string; color?: string }) {
+  return fetchApi("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "upsertKnowledgeTag", ...payload }),
+  });
+}
+
+export async function setKnowledgeLinkTags(payload: { code: string; linkId: number; tagIds: number[] }) {
+  return fetchApi("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "setKnowledgeLinkTags", ...payload }),
+  });
+}
+
+export async function deleteKnowledgeLink(payload: { code: string; id: number }) {
+  return fetchApi("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "deleteKnowledgeLink", ...payload }),
+  });
+}
+
 export async function addProcedure(payload: { code: string; date: string; procedureKey: string; procedureLabel?: string; count?: number; ward?: string }) {
   return fetchApi("/api/sheets", {
     method: "POST",

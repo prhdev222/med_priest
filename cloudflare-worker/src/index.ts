@@ -253,6 +253,145 @@ async function getEncouragement(db: D1Database) {
   return { rows: r.results };
 }
 
+// ─── Knowledge hub (คลังความรู้) ──────────────────────────
+
+type KnowledgeLinkRow = {
+  id: number;
+  title: string;
+  url: string;
+  description: string;
+  icon: string;
+  isPinned: number;
+  isActive: number;
+  createdAt: string;
+  updatedAt: string;
+  tags?: { id: number; name: string; color: string }[];
+};
+
+async function getKnowledgeTags(db: D1Database) {
+  const r = await db.prepare(`SELECT id, name, color, created_at as createdAt FROM knowledge_tags ORDER BY name`).all();
+  return { rows: r.results };
+}
+
+async function getKnowledgeLinks(db: D1Database, params: URLSearchParams) {
+  const q = (params.get("q") || "").trim();
+  const tag = Number(params.get("tag") || 0);
+  const pinnedOnly = String(params.get("pinned") || "") === "1";
+  const includeInactive = String(params.get("includeInactive") || "") === "1";
+
+  const where: string[] = [];
+  const binds: unknown[] = [];
+
+  if (!includeInactive) where.push("l.is_active = 1");
+  if (pinnedOnly) where.push("l.is_pinned = 1");
+  if (q) {
+    where.push(`(l.title LIKE ?${binds.length + 1} OR l.description LIKE ?${binds.length + 1})`);
+    binds.push(`%${q}%`);
+  }
+
+  let join = "";
+  if (tag) {
+    join = "JOIN knowledge_link_tags lt ON lt.link_id = l.id";
+    where.push(`lt.tag_id = ?${binds.length + 1}`);
+    binds.push(tag);
+  }
+
+  const sql = `
+    SELECT
+      l.id, l.title, l.url, l.description, l.icon,
+      l.is_pinned as isPinned, l.is_active as isActive,
+      l.created_at as createdAt, l.updated_at as updatedAt
+    FROM knowledge_links l
+    ${join}
+    ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+    ORDER BY l.is_pinned DESC, l.updated_at DESC, l.id DESC
+    LIMIT 200
+  `;
+  const r = await db.prepare(sql).bind(...binds).all<KnowledgeLinkRow>();
+
+  // load tags for returned links
+  const ids = r.results.map((x) => Number(x.id)).filter(Boolean);
+  if (ids.length === 0) return { rows: [] };
+  const inList = ids.map((_, i) => `?${i + 1}`).join(",");
+  const tr = await db.prepare(
+    `SELECT lt.link_id as linkId, t.id as id, t.name as name, t.color as color
+     FROM knowledge_link_tags lt
+     JOIN knowledge_tags t ON t.id = lt.tag_id
+     WHERE lt.link_id IN (${inList})
+     ORDER BY t.name`
+  ).bind(...ids).all<{ linkId: number; id: number; name: string; color: string }>();
+  const map = new Map<number, { id: number; name: string; color: string }[]>();
+  for (const row of tr.results) {
+    const arr = map.get(row.linkId) ?? [];
+    arr.push({ id: row.id, name: row.name, color: row.color });
+    map.set(row.linkId, arr);
+  }
+  return { rows: r.results.map((l) => ({ ...l, tags: map.get(Number(l.id)) ?? [] })) };
+}
+
+async function upsertKnowledgeLink(env: Env, body: Body) {
+  checkAdmin(env, first(body.code, body.adminCode));
+  const id = Number(body.id || 0);
+  const title = first(body.title).slice(0, 120);
+  const url = first(body.url).slice(0, 500);
+  const description = first(body.description).slice(0, 400);
+  const icon = first(body.icon).slice(0, 20);
+  const isPinned = Number(body.isPinned || 0) ? 1 : 0;
+  const isActive = String(body.isActive ?? "1") === "0" ? 0 : 1;
+  if (!title || !url) throw new Error("ข้อมูลไม่ครบ (title, url)");
+
+  if (id) {
+    const r = await env.DB.prepare(
+      `UPDATE knowledge_links
+       SET title=?1, url=?2, description=?3, icon=?4, is_pinned=?5, is_active=?6, updated_at=datetime('now')
+       WHERE id=?7`
+    ).bind(title, url, description, icon, isPinned, isActive, id).run();
+    if (r.meta.changes === 0) throw new Error("ไม่พบลิงก์ที่ต้องการแก้ไข");
+    return { ok: true, id };
+  }
+
+  const ins = await env.DB.prepare(
+    `INSERT INTO knowledge_links (title, url, description, icon, is_pinned, is_active, updated_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, datetime('now'))`
+  ).bind(title, url, description, icon, isPinned, isActive).run();
+  const newId = (ins.meta as { last_row_id?: number }).last_row_id ?? 0;
+  return { ok: true, id: newId };
+}
+
+async function upsertKnowledgeTag(env: Env, body: Body) {
+  checkAdmin(env, first(body.code, body.adminCode));
+  const name = first(body.name).slice(0, 60);
+  const color = first(body.color).slice(0, 30);
+  if (!name) throw new Error("ข้อมูลไม่ครบ (tag name)");
+  const r = await env.DB.prepare(
+    `INSERT INTO knowledge_tags (name, color) VALUES (?1, ?2)
+     ON CONFLICT(name) DO UPDATE SET color=excluded.color`
+  ).bind(name, color).run();
+  return { ok: true, changes: r.meta.changes ?? 0 };
+}
+
+async function setKnowledgeLinkTags(env: Env, body: Body) {
+  checkAdmin(env, first(body.code, body.adminCode));
+  const linkId = Number(body.linkId || 0);
+  const tagIds = Array.isArray(body.tagIds) ? body.tagIds.map((x) => Number(x)).filter(Boolean) : [];
+  if (!linkId) throw new Error("ข้อมูลไม่ครบ (linkId)");
+
+  await env.DB.prepare(`DELETE FROM knowledge_link_tags WHERE link_id=?1`).bind(linkId).run();
+  for (const tid of tagIds) {
+    await env.DB.prepare(`INSERT OR IGNORE INTO knowledge_link_tags (link_id, tag_id) VALUES (?1, ?2)`).bind(linkId, tid).run();
+  }
+  return { ok: true };
+}
+
+async function deleteKnowledgeLink(env: Env, body: Body) {
+  checkAdmin(env, first(body.code, body.adminCode));
+  const id = Number(body.id || 0);
+  if (!id) throw new Error("ข้อมูลไม่ครบ");
+  const r = await env.DB.prepare(`DELETE FROM knowledge_links WHERE id=?1`).bind(id).run();
+  if (r.meta.changes === 0) throw new Error("ไม่พบลิงก์ที่ต้องการลบ");
+  return { ok: true };
+}
+
 /** แผนหัตถการรายเตียง: ดึงตามวัน/ช่วงวัน และกรอง ward/status */
 async function getProcedurePlans(db: D1Database, params: URLSearchParams) {
   const ward = params.get("ward") || "";
@@ -959,6 +1098,10 @@ export default {
             return json(await getActivities(env.DB));
           case "encouragement":
             return json(await getEncouragement(env.DB));
+          case "knowledgeTags":
+            return json(await getKnowledgeTags(env.DB));
+          case "knowledgeLinks":
+            return json(await getKnowledgeLinks(env.DB, p));
           case "encouragementAdmin":
             checkAdmin(env, first(p.get("code"), p.get("adminCode")));
             return json(await getEncouragement(env.DB));
@@ -1021,6 +1164,14 @@ export default {
             return json(await deleteTodayRow(env, body));
           case "upsertWardBed":
             return json(await upsertWardBed(env, body));
+          case "upsertKnowledgeLink":
+            return json(await upsertKnowledgeLink(env, body));
+          case "upsertKnowledgeTag":
+            return json(await upsertKnowledgeTag(env, body));
+          case "setKnowledgeLinkTags":
+            return json(await setKnowledgeLinkTags(env, body));
+          case "deleteKnowledgeLink":
+            return json(await deleteKnowledgeLink(env, body));
           default:
             return json({ error: "unknown action" }, 400);
         }

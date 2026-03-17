@@ -7,6 +7,7 @@ import { useEffect, useRef, useState } from "react";
 const displayLinks = [
   { href: "/", label: "Dashboard", icon: "📊" },
   { href: "/monitor", label: "Monitor", icon: "📺" },
+  { href: "/knowledge", label: "คลังความรู้", icon: "📚" },
   { href: "/activities", label: "กิจกรรม", icon: "📋" },
   { href: "/encouragement", label: "ให้กำลังใจ", icon: "💛" },
 ];
