@@ -134,6 +134,11 @@ export default function MonitorWard() {
     }));
   }, [wardIpdRows]);
 
+  const planToday = useMemo(
+    () => planWeek.filter((r) => r.planDate === todayKey),
+    [planWeek, todayKey],
+  );
+
   const totalProc = procStats.rows.reduce((s, r) => s + (r.total ?? 0), 0);
   const pieData = useMemo(() => procPieData(procStats.byProcedure), [procStats.byProcedure]);
 
@@ -170,7 +175,7 @@ export default function MonitorWard() {
     }
   };
 
-  const [visibleBlocks, setVisibleBlocks] = useState<Set<string>>(new Set(["summary", "ipd", "proc", "plan"]));
+  const [visibleBlocks, setVisibleBlocks] = useState<Set<string>>(new Set(["summary", "ipd", "proc", "plan", "today"]));
   const [summaryMode, setSummaryMode] = useState<"compact" | "full">("compact");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const toggleBlock = (key: string) => {
@@ -248,6 +253,13 @@ export default function MonitorWard() {
           </button>
           <button
             type="button"
+            className={`monitor-toggle-chip${visibleBlocks.has("today") ? " active" : ""}`}
+            onClick={() => toggleBlock("today")}
+          >
+            🔔 หัตถการวันนี้
+          </button>
+          <button
+            type="button"
             className={`monitor-toggle-chip${visibleBlocks.has("plan") ? " active" : ""}`}
             onClick={() => toggleBlock("plan")}
           >
@@ -273,6 +285,99 @@ export default function MonitorWard() {
               </button>
             </>
           )}
+        </div>
+      )}
+
+      {/* === หัตถการวันนี้ — แสดงเสมอทั้ง fullscreen และปกติ === */}
+      {visibleBlocks.has("today") && planToday.length > 0 && (
+        <div style={{ padding: "10px 16px 0" }}>
+          <div style={{
+            background: "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)",
+            border: "2px solid #f59e0b",
+            borderRadius: 16,
+            padding: "14px 18px",
+            boxShadow: "0 0 24px rgba(245,158,11,0.25)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+              <span style={{ fontSize: "1.4rem" }}>🔔</span>
+              <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "#f59e0b", letterSpacing: 1 }}>
+                หัตถการวันนี้ — {wardName}
+              </span>
+              <span style={{
+                marginLeft: "auto", background: "#f59e0b", color: "#000", fontWeight: 800,
+                borderRadius: 999, padding: "2px 12px", fontSize: "0.95rem",
+              }}>
+                {planToday.length} รายการ
+              </span>
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {planToday.map((r) => {
+                const isDone = r.status === "done";
+                const procLabel = r.procedureKey === "other"
+                  ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other")
+                  : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey);
+                return (
+                  <div key={r.id} style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                    padding: "10px 16px",
+                    borderRadius: 12,
+                    background: isDone ? "#052e16" : "#1c1008",
+                    border: `1.5px solid ${isDone ? "#16a34a" : "#d97706"}`,
+                    minWidth: 200,
+                    flex: "1 1 200px",
+                    opacity: isDone ? 0.65 : 1,
+                  }}>
+                    <span style={{
+                      fontWeight: 900, fontSize: "1.3rem",
+                      color: isDone ? "#4ade80" : "#fbbf24",
+                      minWidth: 56,
+                    }}>
+                      เตียง {r.bed || "-"}
+                    </span>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{
+                        fontWeight: 700, fontSize: "1rem",
+                        color: isDone ? "#86efac" : "#fde68a",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                      }}>
+                        {procLabel}
+                      </div>
+                      {r.procedureKey === "other" && r.procedureLabel && (
+                        <div style={{ fontSize: "0.78rem", color: "#94a3b8", marginTop: 2 }}>
+                          {r.procedureLabel}
+                        </div>
+                      )}
+                    </div>
+                    <span style={{
+                      padding: "4px 10px", borderRadius: 999, fontSize: "0.82rem", fontWeight: 700,
+                      background: isDone ? "#16a34a" : "#92400e",
+                      color: isDone ? "#fff" : "#fde68a",
+                      whiteSpace: "nowrap",
+                    }}>
+                      {isDone ? "✓ ทำแล้ว" : "⏳ รอทำ"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {visibleBlocks.has("today") && planToday.length === 0 && planWeek.length >= 0 && (
+        <div style={{ padding: "10px 16px 0" }}>
+          <div style={{
+            background: "#0f172a", border: "1.5px solid #1f2937",
+            borderRadius: 14, padding: "12px 18px",
+            display: "flex", alignItems: "center", gap: 10,
+          }}>
+            <span style={{ fontSize: "1.2rem" }}>🔔</span>
+            <span style={{ color: "#64748b", fontWeight: 600 }}>
+              ไม่มีแผนหัตถการสำหรับ {wardName} วันนี้ ({todayKey})
+            </span>
+          </div>
         </div>
       )}
 

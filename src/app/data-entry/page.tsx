@@ -4,7 +4,7 @@ import Image from "next/image";
 import { FormEvent, useState, useCallback, useMemo, useEffect } from "react";
 import {
   addIpdAdmit, addIpdDischarge, addStatsRow, addProcedure,
-  addProcedurePlan, getProcedurePlans, markProcedurePlanDone,
+  addProcedurePlan, getProcedurePlans, markProcedurePlanDone, cancelProcedurePlan,
   getIpdOpenCases, getTodayEntries, updateTodayRow, deleteTodayRow,
   getWardBeds, upsertWardBed,
   IpdOpenCase, OpdAdminItem, ErAdminItem, ConsultAdminItem, IpdAdminItem, ProcedureAdminItem,
@@ -366,6 +366,17 @@ export default function DataEntryPage() {
     try {
       await markProcedurePlanDone({ code, id, doneDate: planDoneDate, addToProcedures: true });
       flash("บันทึกทำแล้วสำเร็จ");
+      await Promise.all([loadPlanLists(planWard), loadToday(code)]);
+    } catch (error) { flash((error as Error).message, "error"); }
+  }
+
+  async function doCancelPlanNotDone(id: number) {
+    if (!planWard) return;
+    if (!confirm("ยืนยันติ๊ก \"ไม่ได้ทำ\" และลบรายการนี้ออกจากแผนวันนี้?")) return;
+    setMsg("");
+    try {
+      await cancelProcedurePlan({ code, id });
+      flash("ยกเลิกแผนและลบออกจากระบบแล้ว");
       await Promise.all([loadPlanLists(planWard), loadToday(code)]);
     } catch (error) { flash((error as Error).message, "error"); }
   }
@@ -915,9 +926,14 @@ export default function DataEntryPage() {
                   {r.status === "done" ? (
                     <span style={{ color: "#16a34a", fontWeight: 600 }}>ทำแล้ว ({r.doneDate || "-"})</span>
                   ) : (
-                    <button type="button" className="btn-sm" style={{ background: "#16a34a" }} onClick={() => doMarkPlanDone(r.id)}>
-                      ✓ ทำแล้ว
-                    </button>
+                    <>
+                      <button type="button" className="btn-sm" style={{ background: "#16a34a" }} onClick={() => doMarkPlanDone(r.id)}>
+                        ✓ ทำแล้ว
+                      </button>
+                      <button type="button" className="btn-sm btn-secondary" style={{ borderColor: "#b91c1c", color: "#b91c1c" }} onClick={() => doCancelPlanNotDone(r.id)} title="ไม่ได้ทำ — ลบออกจากแผน">
+                        ✕ ไม่ได้ทำ
+                      </button>
+                    </>
                   )}
                 </div>
               ))

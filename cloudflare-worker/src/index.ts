@@ -200,6 +200,8 @@ async function getProcedurePlans(db: D1Database, params: URLSearchParams) {
   if (status) {
     where.push(`status = ?${binds.length + 1}`);
     binds.push(status);
+  } else {
+    where.push("status <> 'cancelled'");
   }
 
   const sql = `
@@ -496,6 +498,19 @@ async function markProcedurePlanDone(env: Env, body: Body) {
   return { ok: true, procedureId };
 }
 
+/** ติ๊ก "ไม่ได้ทำ" — ยกเลิกแผนและลบออกจากรายการ (ตั้ง status = cancelled) */
+async function cancelProcedurePlan(env: Env, body: Body) {
+  checkUnit(env, first(body.code, body.unitCode));
+  const id = Number(body.id || 0);
+  if (!id) throw new Error("ข้อมูลไม่ครบ");
+
+  const r = await env.DB.prepare(
+    `UPDATE procedure_plans SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?1 AND status <> 'done'`
+  ).bind(id).run();
+  if (r.meta.changes === 0) throw new Error("ไม่พบแผนหัตถการหรือทำไปแล้ว (ทำแล้วไม่สามารถยกเลิกได้)");
+  return { ok: true };
+}
+
 async function addIpdAdmit(env: Env, body: Body) {
   checkUnit(env, first(body.code));
   const stayType = first(body.stayType) || "admit";
@@ -721,6 +736,8 @@ export default {
             return json(await addProcedurePlan(env, body));
           case "markProcedurePlanDone":
             return json(await markProcedurePlanDone(env, body));
+          case "cancelProcedurePlan":
+            return json(await cancelProcedurePlan(env, body));
           case "addIpdAdmit":
             return json(await addIpdAdmit(env, body));
           case "addIpdDischarge":

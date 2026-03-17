@@ -448,6 +448,15 @@ export async function markProcedurePlanDone(payload: {
   });
 }
 
+/** ติ๊ก "ไม่ได้ทำ" — ยกเลิกแผนและลบออกจากรายการในระบบ */
+export async function cancelProcedurePlan(payload: { code: string; id: number }) {
+  return fetchApi("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "cancelProcedurePlan", ...payload }),
+  });
+}
+
 export async function addProcedure(payload: { code: string; date: string; procedureKey: string; procedureLabel?: string; count?: number; ward?: string }) {
   return fetchApi("/api/sheets", {
     method: "POST",
