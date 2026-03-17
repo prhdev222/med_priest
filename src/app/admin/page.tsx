@@ -50,6 +50,13 @@ export default function AdminPage() {
     { value: "🧪", label: "Lab" },
     { value: "🩻", label: "X-ray/Imaging" },
     { value: "🧾", label: "แนวทาง/Guideline" },
+    { value: "🧰", label: "Clinical Tools" },
+    { value: "🤖", label: "AI/Automation" },
+    { value: "📝", label: "สรุปความ/Note" },
+    { value: "📄", label: "Doctor order/เอกสาร" },
+    { value: "🔁", label: "แปลงรูปแบบ/Convert" },
+    { value: "🔍", label: "ค้นหา/อ้างอิง" },
+    { value: "⏱️", label: "Workflow/Time-saver" },
     { value: "📌", label: "สำคัญ/Pinned" },
   ] as const;
   const [adminCode, setAdminCode] = useState("");
