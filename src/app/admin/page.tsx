@@ -38,6 +38,20 @@ type Tab = "patients" | "activities" | "encouragement" | "knowledge" | "sheets";
 const wards = ["MED1", "MED2", "IMC", "Palliative", "ward90", "ICU"];
 
 export default function AdminPage() {
+  const KNOWLEDGE_ICON_OPTIONS = [
+    { value: "🔗", label: "ลิงก์ทั่วไป" },
+    { value: "🧠", label: "Stroke/Neuro" },
+    { value: "🫀", label: "หัวใจ/Cardio" },
+    { value: "💊", label: "ยา/Drug" },
+    { value: "🩸", label: "เลือด/INR" },
+    { value: "🫁", label: "ปอด/Resp" },
+    { value: "🦠", label: "ติดเชื้อ/Infection" },
+    { value: "🩺", label: "ตรวจร่างกาย/Clinical" },
+    { value: "🧪", label: "Lab" },
+    { value: "🩻", label: "X-ray/Imaging" },
+    { value: "🧾", label: "แนวทาง/Guideline" },
+    { value: "📌", label: "สำคัญ/Pinned" },
+  ] as const;
   const [adminCode, setAdminCode] = useState("");
   const [unlocked, setUnlocked] = useState(false);
   const [error, setError] = useState("");
@@ -972,7 +986,14 @@ export default function AdminPage() {
                 <div className="field-group"><label>URL</label><input value={kForm.url} onChange={(e) => setKForm({ ...kForm, url: e.target.value })} required /></div>
               </div>
               <div className="field-grid-2">
-                <div className="field-group"><label>ไอคอน (emoji)</label><input value={kForm.icon} onChange={(e) => setKForm({ ...kForm, icon: e.target.value })} /></div>
+                <div className="field-group">
+                  <label>ไอคอน</label>
+                  <select value={kForm.icon} onChange={(e) => setKForm({ ...kForm, icon: e.target.value })}>
+                    {KNOWLEDGE_ICON_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.value} {o.label}</option>
+                    ))}
+                  </select>
+                </div>
                 <div className="field-group"><label>คำอธิบาย</label><input value={kForm.description} onChange={(e) => setKForm({ ...kForm, description: e.target.value })} /></div>
               </div>
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
