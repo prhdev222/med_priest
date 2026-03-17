@@ -340,7 +340,7 @@ export default function MonitorWard() {
 
       {/* Filter toggles (ใต้แถบบนสุด) — ซ่อนเมื่อ Fullscreen */}
       {!isFullscreen && (
-        <div style={{ padding: "10px 16px 0", display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" }}>
+        <div className="monitor-toggle-row" style={{ padding: "10px 16px 0" }}>
           <span style={{ fontSize: "0.9rem", color: "#9ca3af" }}>ส่วนที่แสดง:</span>
           <button
             type="button"

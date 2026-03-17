@@ -493,6 +493,14 @@ export async function cancelProcedurePlan(payload: { code: string; id: number })
   });
 }
 
+export async function deleteProcedurePlan(payload: { code: string; id: number }) {
+  return fetchApi("/api/sheets", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "deleteProcedurePlan", ...payload }),
+  });
+}
+
 export async function addProcedure(payload: { code: string; date: string; procedureKey: string; procedureLabel?: string; count?: number; ward?: string }) {
   return fetchApi("/api/sheets", {
     method: "POST",

@@ -20,6 +20,9 @@ import {
   getProcedurePlansAdmin,
   updateRow,
   updateProcedurePlan,
+  markProcedurePlanDone,
+  cancelProcedurePlan,
+  deleteProcedurePlan,
 } from "@/lib/api";
 import LoadingOverlay from "@/components/LoadingOverlay";
 
@@ -69,6 +72,7 @@ export default function AdminPage() {
   // Procedure plan edit (PDPA)
   const [editPlan, setEditPlan] = useState<ProcedurePlanAdminRow | null>(null);
   const [ePlanForm, setEPlanForm] = useState({ bed: "", hn: "", name: "" });
+  const [planDoneDate, setPlanDoneDate] = useState("");
 
   const [showIpdOpen, setShowIpdOpen] = useState(true);
   const [filterWard, setFilterWard] = useState("__all__");
@@ -105,6 +109,7 @@ export default function AdminPage() {
       setIpdOpen(p.ipdOpen || []);
       const plans = await getProcedurePlansAdmin(adminCode, searchDate, searchPlansWard);
       setSearchPlans(plans.rows || []);
+      setPlanDoneDate(searchDate);
       setSearched(true);
     } catch (err) {
       setError((err as Error).message);
@@ -239,6 +244,40 @@ export default function AdminPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function doPlanDone(id: number) {
+    if (!planDoneDate) { setError("กรุณาเลือกวันที่ทำจริง"); return; }
+    if (!confirm(`ยืนยันติ๊กทำแล้ว (วันที่ทำจริง: ${planDoneDate}) ?`)) return;
+    try {
+      setLoading(true);
+      await markProcedurePlanDone({ code: adminCode, id, doneDate: planDoneDate, addToProcedures: true });
+      flash("บันทึกทำแล้วสำเร็จ");
+      await reloadPlansOnly();
+    } catch (err) { setError((err as Error).message); }
+    finally { setLoading(false); }
+  }
+
+  async function doPlanCancel(id: number) {
+    if (!confirm("ยืนยันติ๊ก \"ไม่ได้ทำ\" และลบข้อมูลคนไข้ที่เข้ารหัสออก?")) return;
+    try {
+      setLoading(true);
+      await cancelProcedurePlan({ code: adminCode, id });
+      flash("ยกเลิกแผน (ไม่ได้ทำ) สำเร็จ");
+      await reloadPlansOnly();
+    } catch (err) { setError((err as Error).message); }
+    finally { setLoading(false); }
+  }
+
+  async function doPlanDelete(id: number) {
+    if (!confirm("ยืนยันลบแผนหัตถการนี้ถาวร?")) return;
+    try {
+      setLoading(true);
+      await deleteProcedurePlan({ code: adminCode, id });
+      flash("ลบแผนหัตถการสำเร็จ");
+      await reloadPlansOnly();
+    } catch (err) { setError((err as Error).message); }
+    finally { setLoading(false); }
   }
 
   /* ─── Activity handlers ─── */
@@ -637,6 +676,10 @@ export default function AdminPage() {
                               <option value="MED1">MED1</option>
                               <option value="MED2">MED2</option>
                             </select>
+                            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                              <span style={{ fontSize: "0.85rem", color: "var(--muted)" }}>วันที่ทำจริง:</span>
+                              <input type="date" value={planDoneDate} onChange={(e) => setPlanDoneDate(e.target.value)} style={{ height: 36 }} />
+                            </div>
                             <button type="button" className="btn-sm btn-secondary" onClick={reloadPlansOnly}>รีเฟรชแผน</button>
                           </div>
                         </div>
@@ -679,18 +722,49 @@ export default function AdminPage() {
                                   <td>{r.procedureKey === "other" ? (r.procedureLabel ? `Other: ${r.procedureLabel}` : "Other") : (PROCEDURE_OPTIONS.find((o) => o.key === r.procedureKey)?.label ?? r.procedureKey)}</td>
                                   <td>{r.status}</td>
                                   <td>
-                                    <button
-                                      type="button"
-                                      className="btn-sm btn-edit"
-                                      onClick={() => {
-                                        setEditPlan(r);
-                                        setEPlanForm({ bed: r.bed || "", hn: r.patientHn || "", name: r.patientName || "" });
-                                      }}
-                                      disabled={r.status === "done"}
-                                      title={r.status === "done" ? "ทำแล้วแก้ไขไม่ได้" : "แก้ไขเตียง/ชื่อ/HN"}
-                                    >
-                                      แก้ไข
-                                    </button>
+                                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                      <button
+                                        type="button"
+                                        className="btn-sm btn-edit"
+                                        onClick={() => {
+                                          setEditPlan(r);
+                                          setEPlanForm({ bed: r.bed || "", hn: r.patientHn || "", name: r.patientName || "" });
+                                        }}
+                                        disabled={r.status === "done"}
+                                        title={r.status === "done" ? "ทำแล้วแก้ไขไม่ได้" : "แก้ไขเตียง/ชื่อ/HN"}
+                                      >
+                                        แก้ไข
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-sm"
+                                        style={{ background: "#16a34a" }}
+                                        onClick={() => doPlanDone(r.id)}
+                                        disabled={r.status === "done"}
+                                        title="ติ๊กทำแล้ว"
+                                      >
+                                        ✓ ทำแล้ว
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-sm btn-secondary"
+                                        style={{ borderColor: "#b91c1c", color: "#b91c1c" }}
+                                        onClick={() => doPlanCancel(r.id)}
+                                        disabled={r.status === "done"}
+                                        title="ไม่ได้ทำ (ยกเลิกแผน)"
+                                      >
+                                        ✕ ไม่ได้ทำ
+                                      </button>
+                                      <button
+                                        type="button"
+                                        className="btn-sm btn-delete"
+                                        onClick={() => doPlanDelete(r.id)}
+                                        disabled={r.status === "done"}
+                                        title="ลบแผนถาวร"
+                                      >
+                                        ลบ
+                                      </button>
+                                    </div>
                                   </td>
                                 </tr>
                               ))}

@@ -2503,6 +2503,7 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
   display: flex;
   align-items: center;
   gap: 16px;
+  min-width: 0;
 }
 
 .monitor-logo {
@@ -2514,6 +2515,7 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
   font-weight: 700;
   color: #f8fafc;
   margin: 0;
+  min-width: 0;
 }
 
 .monitor-clock {
@@ -2612,6 +2614,15 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
   transform: translateY(0px) scale(0.99);
 }
 
+.monitor-toggle-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  max-width: 100%;
+  overflow-x: hidden;
+}
+
 /* Grid Layouts */
 .monitor-grid {
   flex: 1;
@@ -2642,6 +2653,7 @@ th { background: var(--surface-soft); color: #334155; font-weight: 600; font-siz
   border-radius: 16px;
   padding: 20px;
   border: 1px solid #334155;
+  min-width: 0;
 }
 
 .monitor-big-num {
@@ -2872,6 +2884,40 @@ body:has(.monitor-page) section {
     gap: 8px;
     padding: 10px 16px;
   }
+  .monitor-topbar-left,
+  .monitor-topbar-right {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .monitor-title {
+    font-size: 1.05rem;
+    line-height: 1.2;
+    word-break: break-word;
+  }
+  .monitor-refresh-btn {
+    padding: 8px 12px;
+    font-size: 0.95rem;
+  }
+  .monitor-clock { font-size: 1.25rem; }
+  .monitor-date { font-size: 0.9rem; }
+
+  /* Chips ยาวเกินจอ: ให้เลื่อนแนวนอนได้ */
+  .monitor-toggle-row {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 6px;
+  }
+  .monitor-toggle-row > * { flex: 0 0 auto; }
+  .monitor-toggle-chip {
+    font-size: 0.85rem;
+    padding: 7px 10px;
+  }
+  .monitor-toggle-row::-webkit-scrollbar { height: 6px; }
+  .monitor-toggle-row::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 999px; }
+  .monitor-toggle-row::-webkit-scrollbar-track { background: rgba(15, 23, 42, 0.3); border-radius: 999px; }
   .monitor-grid {
     padding: 12px 12px;
   }

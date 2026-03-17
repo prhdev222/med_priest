@@ -690,7 +690,7 @@ async function procedurePlansDecrypted(env: Env, body: Body) {
 }
 
 async function markProcedurePlanDone(env: Env, body: Body) {
-  checkUnit(env, first(body.code, body.unitCode));
+  checkStaff(env, first(body.code, body.unitCode, body.adminCode));
   const id = Number(body.id || 0);
   const doneDate = first(body.doneDate);
   const addToProcedures = String(body.addToProcedures ?? "true") !== "false";
@@ -740,7 +740,7 @@ async function markProcedurePlanDone(env: Env, body: Body) {
 
 /** ติ๊ก "ไม่ได้ทำ" — ยกเลิกแผนและลบออกจากรายการ (ตั้ง status = cancelled) */
 async function cancelProcedurePlan(env: Env, body: Body) {
-  checkUnit(env, first(body.code, body.unitCode));
+  checkStaff(env, first(body.code, body.unitCode, body.adminCode));
   const id = Number(body.id || 0);
   if (!id) throw new Error("ข้อมูลไม่ครบ");
 
@@ -751,6 +751,18 @@ async function cancelProcedurePlan(env: Env, body: Body) {
 
   // PDPA: ลบข้อมูลคนไข้ที่เข้ารหัสทันทีเมื่อสรุปว่าไม่ได้ทำ
   await env.DB.prepare(`DELETE FROM procedure_plan_patients WHERE plan_id = ?1`).bind(id).run();
+  return { ok: true };
+}
+
+/** ลบแผนหัตถการ (ถาวร) — เฉพาะ staff/admin และต้องยังไม่ done */
+async function deleteProcedurePlan(env: Env, body: Body) {
+  checkStaff(env, first(body.code, body.unitCode, body.adminCode));
+  const id = Number(body.id || 0);
+  if (!id) throw new Error("ข้อมูลไม่ครบ");
+  // ลบข้อมูลเข้ารหัส (กันค้าง) แล้วค่อยลบแผน
+  await env.DB.prepare(`DELETE FROM procedure_plan_patients WHERE plan_id = ?1`).bind(id).run();
+  const r = await env.DB.prepare(`DELETE FROM procedure_plans WHERE id = ?1 AND status <> 'done'`).bind(id).run();
+  if (r.meta.changes === 0) throw new Error("ไม่พบแผนหัตถการหรือทำไปแล้ว (ทำแล้วไม่สามารถลบได้)");
   return { ok: true };
 }
 
@@ -989,6 +1001,8 @@ export default {
             return json(await markProcedurePlanDone(env, body));
           case "cancelProcedurePlan":
             return json(await cancelProcedurePlan(env, body));
+          case "deleteProcedurePlan":
+            return json(await deleteProcedurePlan(env, body));
           case "addIpdAdmit":
             return json(await addIpdAdmit(env, body));
           case "addIpdDischarge":
