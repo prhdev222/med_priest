@@ -15,7 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <main className="app-shell">{children}</main>
         <footer className="site-footer">
           <p className="footer-brand">&copy; 2026 directed by <a href="mailto:uradev222@gmail.com" className="footer-link">Uradev</a></p>
-          <p className="footer-motto">สร้างด้วยใจ เพื่อแผนกอายุรกรรม รักและสามัคคีกัน</p>
+          <p className="footer-motto">สร้างด้วยใจ เพื่อแผนกอายุรกรรม รักและสามัคคีกัน — นตฺถิ กมฺมํ สม พลํ</p>
         </footer>
       </body>
     </html>

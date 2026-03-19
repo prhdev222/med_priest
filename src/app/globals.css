@@ -266,6 +266,16 @@ section {
   padding: 24px;
 }
 
+/* Knowledge page background */
+.knowledge-page {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.88) 100%),
+    url("/Chewaka.png");
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
 .page-header {
   margin-bottom: 20px;
 }

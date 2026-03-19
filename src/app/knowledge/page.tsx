@@ -33,7 +33,7 @@ export default function KnowledgePage() {
   const others = useMemo(() => links.filter((l) => Number(l.isPinned) !== 1), [links]);
 
   return (
-    <section>
+    <section className="knowledge-page">
       <div className="page-header">
         <h1>📚 คลังความรู้</h1>
         <p>รวมเว็บ/เครื่องมือช่วยตรวจผู้ป่วย — ค้นหาและกรองตามแท็กได้</p>
